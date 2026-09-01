@@ -1,42 +1,64 @@
-# Python
+# ── Python ──────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+
+# Virtual environments
 .venv/
 venv/
 ENV/
+env/
 env.bak/
 venv.bak/
 
-# Environment Variables
+# Distribution / build
+build/
+dist/
+develop-eggs/
+eggs/
+.eggs/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ── Environment & Secrets ────────────────────────────────────────────────────
 .env
 .env.local
+.env.*.local
+*.secret
 
-# Node.js
+# ── Node.js / Frontend ───────────────────────────────────────────────────────
 node_modules/
-npm-debug.log
-yarn-error.log
+frontend/dist/
+frontend/dist-ssr/
+npm-debug.log*
+yarn-error.log*
+*.local
 
-# OS/Editor Files
+# ── ML / AI ──────────────────────────────────────────────────────────────────
+# Large model weights — store in cloud storage, not Git
+*.pt
+*.pth
+*.onnx
+*.weights
+*.h5
+*.pb
+*.tflite
+
+# Dataset files — too large for Git
+/datasets/*
+!/datasets/.gitkeep
+
+# Training runs and experiment logs
+runs/
+wandb/
+mlruns/
+*.csv
+!frontend/src/**/*.csv
+
+# ── OS / Editor ──────────────────────────────────────────────────────────────
 .DS_Store
 .DS_Store?
 ._*
@@ -44,22 +66,18 @@ yarn-error.log
 .Trashes
 ehthumbs.db
 Thumbs.db
+
 .vscode/
 .idea/
 *.swp
 *.swo
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
 
-# ML Caches
-*.pt
-*.pth
-*.onnx
-*.weights
-*.h5
-*.pb
-/datasets/*
-!/datasets/.gitkeep
-
-# Temporary files
+# ── Misc ─────────────────────────────────────────────────────────────────────
 *.tmp
 *.temp
 *.log
+

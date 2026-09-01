@@ -1,26 +1,113 @@
-# Collaboration Guide
+# Contributing Guide
 
-Welcome to the team! To ensure a smooth development process, please follow these guidelines:
+Welcome to the SIH'26 Urban Intelligence team. This guide describes how to contribute code, documentation, and work to this repository.
 
-## Rules
+---
 
-1. **Do development on a feature branch.** Never commit directly to `main`.
-2. **Use meaningful branch names:** Format: `<member-name>/<module>`
-   *Examples:*
-   * `pranav/traffic-ai`
-   * `abhinandan/pothole-ai`
-   * `arjun/backend`
-   * `advika/frontend-gis`
-   * `parminder/edge-integration`
-3. **Do not directly push experimental work to `main`.**
-4. **Make meaningful commits.** Follow standard conventional commit formats where possible.
-   *Example commits:*
-   * `feat: add vehicle detection`
-   * `feat: add pothole inference`
-   * `feat: create events API`
-   * `feat: add GIS markers`
-   * `fix: correct vehicle counting`
-   * `docs: update architecture`
-5. **Open a pull request** before merging major work. Have at least one team member review it.
-6. **Keep documentation updated.** If you change an API or a core model, update the docs.
-7. **Test your module** locally before requesting integration with the main branch.
+## Branch Strategy
+
+```
+main  ← stable, always deployable
+  ↑
+  merge via Pull Request
+  ↑
+feature branch  ← your working branch
+```
+
+**Do not push directly to `main`.** All work goes to a feature branch first.
+
+### Suggested Branch Names
+
+| Member | Branch |
+|--------|--------|
+| Pranav | `pranav/traffic-ai` |
+| Abhinandan | `abhinandan/pothole-ai` |
+| Arjun | `arjun/backend` |
+| Advika | `advika/frontend-gis` |
+| Parminder | `parminder/edge-integration` |
+
+For sub-tasks, extend the branch name:
+- `pranav/traffic-ai-vehicle-counting`
+- `arjun/backend-events-api`
+
+---
+
+## Workflow
+
+```
+1. git checkout main
+2. git pull origin main          ← always start from latest main
+3. git checkout -b pranav/traffic-ai
+4. ... do your work ...
+5. git add .
+6. git commit -m "feat: add vehicle classification"
+7. git push origin pranav/traffic-ai
+8. Open a Pull Request on GitHub → main
+9. Get at least one review
+10. Merge
+```
+
+---
+
+## Commit Message Format
+
+Use conventional commits:
+
+```
+feat: add pothole detection model
+fix: correct vehicle counting boundary
+docs: update event schema with status field
+refactor: split event generator into functions
+test: add confidence threshold tests
+```
+
+**Bad commits:**
+- `update`
+- `changes`
+- `final`
+- `stuff`
+- `asdfgh`
+
+---
+
+## Pull Request Rules
+
+1. **One PR per feature or module area** — keep PRs focused
+2. **Add a short description** of what you changed and why
+3. **Tag the relevant team member** for review
+4. **Ensure the frontend still builds** if you touch any shared config
+5. **Update docs** if you change an API contract or model output format
+6. **No secrets or API keys** — never commit `.env` files
+
+---
+
+## Development Rules
+
+1. **Never commit directly to `main`** — always use a branch
+2. **Pull latest main before starting integration** work
+3. **Follow the event schema** in `docs/api/event-schema.md` exactly — do not invent your own format
+4. **Test your module locally** before opening a PR
+5. **Communicate blockers** immediately — don't wait until the deadline
+6. **No scope creep** — future features (ANPR, waterlogging, etc.) are not in scope for SIH'26
+
+---
+
+## Issue Tracking
+
+Use GitHub Issues with these labels:
+- `ai` — Traffic AI tasks
+- `ml` — Road/pothole AI tasks
+- `backend` — Backend API tasks
+- `frontend` — Frontend/GIS tasks
+- `integration` — Edge/pipeline tasks
+- `docs` — Documentation tasks
+- `bug` — Bug reports
+- `blocked` — Blocked tasks
+
+See `docs/project-board.md` for the full task list.
+
+---
+
+## Questions?
+
+Raise it in your team chat or open a GitHub Issue with the `question` label.
