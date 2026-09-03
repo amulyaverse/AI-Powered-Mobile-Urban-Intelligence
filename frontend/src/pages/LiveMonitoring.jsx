@@ -1,20 +1,53 @@
 import React, { useEffect, useState } from 'react';
-import { getBuses } from '../services/api';
-import { Truck, Video, SignalHigh, AlertCircle } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { getBuses, getEvents } from '../services/api';
+import { Truck, Video, SignalHigh, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { formatDistanceToNow, isValid } from 'date-fns';
 
 export default function LiveMonitoring() {
   const [buses, setBuses] = useState([]);
   const [selectedBus, setSelectedBus] = useState(null);
+  const [latestDetection, setLatestDetection] = useState(null);
 
   useEffect(() => {
     async function loadData() {
-      const data = await getBuses();
-      setBuses(data);
-      if (data.length > 0) setSelectedBus(data[0]);
+      try {
+        const data = await getBuses();
+        setBuses(data);
+        if (data.length > 0) {
+          setSelectedBus((prev) => (prev ? data.find((b) => b.id === prev.id) || data[0] : data[0]));
+        }
+      } catch (err) {
+        console.error('Failed to load buses:', err);
+      }
     }
     loadData();
+    // Poll every 5 seconds for live GPS updates
+    const interval = setInterval(loadData, 5_000);
+    return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    async function loadLatestDetection() {
+      if (!selectedBus) return;
+      try {
+        const evts = await getEvents({ bus_id: selectedBus.id, limit: 1 });
+        setLatestDetection(evts.length > 0 ? evts[0] : null);
+      } catch (err) {
+        console.error('Failed to load latest detection:', err);
+      }
+    }
+    loadLatestDetection();
+  }, [selectedBus?.id]);
+
+  const formatTimeAgo = (dateStr) => {
+    if (!dateStr) return 'Unknown';
+    const d = new Date(dateStr);
+    return isValid(d) ? formatDistanceToNow(d) : 'Just now';
+  };
+
+  const currentLat = selectedBus ? (selectedBus.last_lat ?? selectedBus.lat ?? 0) : 0;
+  const currentLng = selectedBus ? (selectedBus.last_lng ?? selectedBus.lng ?? 0) : 0;
+  const currentTraffic = selectedBus ? (selectedBus.last_traffic ?? selectedBus.traffic ?? 'Unknown') : 'Unknown';
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
@@ -47,8 +80,12 @@ export default function LiveMonitoring() {
                 </div>
                 <div className="text-sm text-slate-500 mb-2">{bus.route}</div>
                 <div className="flex gap-4 text-xs text-slate-400 font-medium">
-                  <span className="flex items-center gap-1"><Video className="w-3 h-3" /> {bus.cameraStatus}</span>
-                  <span className="flex items-center gap-1"><SignalHigh className="w-3 h-3" /> {formatDistanceToNow(new Date(bus.lastUpdate))} ago</span>
+                  <span className="flex items-center gap-1">
+                    <Video className="w-3 h-3" /> {bus.camera_status || bus.cameraStatus || 'Active'}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <SignalHigh className="w-3 h-3" /> {formatTimeAgo(bus.last_seen || bus.lastUpdate)} ago
+                  </span>
                 </div>
               </button>
             ))}
@@ -64,7 +101,9 @@ export default function LiveMonitoring() {
                 <p className="text-sm text-slate-500">{selectedBus.route}</p>
               </div>
               <div className="flex items-center gap-2">
-                <span className="px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-full">Traffic: {selectedBus.traffic}</span>
+                <span className="px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-full">
+                  Traffic: {currentTraffic}
+                </span>
               </div>
             </div>
             
@@ -76,7 +115,7 @@ export default function LiveMonitoring() {
                   <span className="bg-black/50 text-white text-xs px-2 py-1 rounded">CAM_FRONT</span>
                 </div>
                 <div className="absolute top-4 right-4 text-white font-mono text-xs bg-black/50 px-2 py-1 rounded">
-                  {selectedBus.lat.toFixed(4)}, {selectedBus.lng.toFixed(4)}
+                  {typeof currentLat === 'number' ? currentLat.toFixed(4) : currentLat}, {typeof currentLng === 'number' ? currentLng.toFixed(4) : currentLng}
                 </div>
                 <Video className="w-16 h-16 text-slate-700" />
                 <p className="absolute bottom-4 left-4 text-white/50 text-sm">Simulated Camera Stream</p>
@@ -91,14 +130,26 @@ export default function LiveMonitoring() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 border border-slate-200 rounded-lg bg-slate-50">
                   <p className="text-sm text-slate-500 mb-1">Current Location</p>
-                  <p className="font-mono text-slate-700">{selectedBus.lat.toFixed(4)}, {selectedBus.lng.toFixed(4)}</p>
+                  <p className="font-mono text-slate-700">
+                    {typeof currentLat === 'number' ? currentLat.toFixed(4) : currentLat}, {typeof currentLng === 'number' ? currentLng.toFixed(4) : currentLng}
+                  </p>
                 </div>
                 <div className="p-4 border border-slate-200 rounded-lg bg-slate-50">
                   <p className="text-sm text-slate-500 mb-1">Latest Detection</p>
-                  <p className="font-semibold text-slate-700 flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 text-amber-500" />
-                    Pothole (2 mins ago)
-                  </p>
+                  {latestDetection ? (
+                    <div className="font-semibold text-slate-700 flex items-center gap-2">
+                      <AlertCircle className={`w-4 h-4 ${latestDetection.severity === 'high' ? 'text-red-500' : 'text-amber-500'}`} />
+                      <span className="capitalize">{latestDetection.event_type.replace('_', ' ')}</span>
+                      <span className="text-xs text-slate-500 font-normal">
+                        ({formatTimeAgo(latestDetection.timestamp)} ago)
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-slate-600 flex items-center gap-2 text-sm">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                      No recent incidents
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -108,3 +159,4 @@ export default function LiveMonitoring() {
     </div>
   );
 }
+

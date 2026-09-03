@@ -1,14 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { getTrafficAnalytics } from '../services/api';
+import { getTrafficAnalytics, getTrafficSummary } from '../services/api';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, Cell, PieChart, Pie } from 'recharts';
 
 export default function TrafficAnalytics() {
   const [data, setData] = useState(null);
+  const [summary, setSummary] = useState(null);
 
   useEffect(() => {
     async function loadData() {
-      const result = await getTrafficAnalytics();
-      setData(result);
+      try {
+        const [analyticsData, summaryData] = await Promise.all([
+          getTrafficAnalytics(),
+          getTrafficSummary(),
+        ]);
+        setData(analyticsData);
+        setSummary(summaryData);
+      } catch (err) {
+        console.error('Failed to load traffic analytics:', err);
+      }
     }
     loadData();
   }, []);
@@ -16,6 +25,13 @@ export default function TrafficAnalytics() {
   if (!data) return <div className="p-4">Loading analytics...</div>;
 
   const COLORS = ['#0ea5e9', '#f59e0b', '#10b981', '#6366f1'];
+
+  const densityLabel =
+    (summary?.avgTrafficDensity ?? 50) > 75
+      ? 'Critical Delay'
+      : (summary?.avgTrafficDensity ?? 50) > 50
+      ? 'Moderate-Heavy'
+      : 'Smooth Flow';
 
   return (
     <div className="space-y-6">
@@ -25,25 +41,38 @@ export default function TrafficAnalytics() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-lg shadow border border-slate-200">
           <p className="text-sm text-slate-500 font-medium">Total Vehicles Detected</p>
-          <p className="text-3xl font-bold text-slate-800 mt-1">8,950</p>
-          <p className="text-xs text-emerald-600 font-medium mt-1">+12% vs yesterday</p>
+          <p className="text-3xl font-bold text-slate-800 mt-1">
+            {summary?.totalVehicles !== undefined ? summary.totalVehicles.toLocaleString() : '—'}
+          </p>
+          <p className="text-xs text-emerald-600 font-medium mt-1">Telemetry active across Delhi</p>
         </div>
         <div className="bg-white p-5 rounded-lg shadow border border-slate-200">
           <p className="text-sm text-slate-500 font-medium">Avg Traffic Density</p>
-          <p className="text-3xl font-bold text-amber-600 mt-1">68%</p>
-          <p className="text-xs text-amber-700 font-medium mt-1">Moderate-Heavy</p>
+          <p className="text-3xl font-bold text-amber-600 mt-1">
+            {summary?.avgTrafficDensity !== undefined ? `${summary.avgTrafficDensity}%` : '—'}
+          </p>
+          <p className="text-xs text-amber-700 font-medium mt-1">{densityLabel}</p>
         </div>
         <div className="bg-white p-5 rounded-lg shadow border border-slate-200">
           <p className="text-sm text-slate-500 font-medium">Congestion Hotspots</p>
-          <p className="text-3xl font-bold text-slate-800 mt-1">14</p>
-          <p className="text-xs text-rose-600 font-medium mt-1">3 critical areas</p>
+          <p className="text-3xl font-bold text-slate-800 mt-1">
+            {summary?.congestionHotspots ?? '—'}
+          </p>
+          <p className="text-xs text-rose-600 font-medium mt-1">
+            {summary?.criticalHotspots ?? 0} high-severity clusters
+          </p>
         </div>
         <div className="bg-white p-5 rounded-lg shadow border border-slate-200">
           <p className="text-sm text-slate-500 font-medium">Monitoring Fleet</p>
-          <p className="text-3xl font-bold text-slate-800 mt-1">24</p>
-          <p className="text-xs text-slate-500 font-medium mt-1">Active cameras: 46</p>
+          <p className="text-3xl font-bold text-slate-800 mt-1">
+            {summary?.monitoringFleet ?? '—'}
+          </p>
+          <p className="text-xs text-slate-500 font-medium mt-1">
+            Active cameras: {summary?.activeCameras ?? 0}
+          </p>
         </div>
       </div>
+
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Density Over Time */}

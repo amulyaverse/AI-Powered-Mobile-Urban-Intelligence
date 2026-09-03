@@ -1,19 +1,70 @@
 import React, { useEffect, useState } from 'react';
-import { getEvents } from '../services/api';
+import { useLocation } from 'react-router-dom';
+import { getEvents, updateEventStatus } from '../services/api';
 import { format } from 'date-fns';
-import { Filter, Search, Eye, AlertTriangle } from 'lucide-react';
+import { Filter, Search, Eye, AlertTriangle, X, SlidersHorizontal } from 'lucide-react';
 
 export default function EventPage() {
+  const location = useLocation();
   const [events, setEvents] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterType, setFilterType] = useState('all');
+  const [filterSeverity, setFilterSeverity] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [loading, setLoading] = useState(false);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const query = {};
+      if (searchTerm.trim()) query.search = searchTerm.trim();
+      if (filterType !== 'all') query.event_type = filterType;
+      if (filterSeverity !== 'all') query.severity = filterSeverity;
+      if (filterStatus !== 'all') query.status = filterStatus;
+
+      const data = await getEvents(query);
+      setEvents(data);
+
+      // Auto-open if selectedEventId was passed via route state
+      if (location.state?.selectedEventId) {
+        const target = data.find((e) => e.event_id === location.state.selectedEventId);
+        if (target) setSelectedEvent(target);
+      }
+    } catch (err) {
+      console.error('Failed to load events:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function loadData() {
-      const data = await getEvents();
-      setEvents(data);
+    const timer = setTimeout(() => {
+      loadData();
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchTerm, filterType, filterSeverity, filterStatus]);
+
+  const handleStatusUpdate = async (eventId, newStatus) => {
+    try {
+      const updated = await updateEventStatus(eventId, newStatus);
+      setEvents((prev) => prev.map((e) => (e.event_id === eventId ? updated : e)));
+      setSelectedEvent(updated);
+    } catch (err) {
+      console.error('Status update failed:', err);
     }
-    loadData();
-  }, []);
+  };
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setFilterType('all');
+    setFilterSeverity('all');
+    setFilterStatus('all');
+  };
+
+  const hasActiveFilters = searchTerm || filterType !== 'all' || filterSeverity !== 'all' || filterStatus !== 'all';
+
 
   const getSeverityColor = (severity) => {
     switch(severity) {
@@ -36,24 +87,107 @@ export default function EventPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-end">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">Incident & Event Management</h2>
-          <p className="text-slate-500">Review and manage urban intelligence events detected by the fleet.</p>
-        </div>
-        <div className="flex gap-3">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Search events..." 
-              className="pl-9 pr-4 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 w-64"
-            />
+      <div className="flex flex-col gap-3">
+        <div className="flex justify-between items-end">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-800">Incident & Event Management</h2>
+            <p className="text-slate-500">Review and manage urban intelligence events detected by the fleet.</p>
           </div>
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-50">
-            <Filter className="w-4 h-4" /> Filters
-          </button>
+          <div className="flex gap-3">
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+              <input 
+                type="text" 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search by ID, bus, type..." 
+                className="pl-9 pr-8 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 w-64 bg-white"
+              />
+              {searchTerm && (
+                <button 
+                  onClick={() => setSearchTerm('')} 
+                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            <button 
+              onClick={() => setShowFilters(!showFilters)}
+              className={`flex items-center gap-2 px-4 py-2 border rounded-md text-sm font-medium transition-colors ${
+                showFilters || hasActiveFilters
+                  ? 'bg-brand-50 border-brand-500 text-brand-700'
+                  : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <Filter className="w-4 h-4" />
+              <span>Filters</span>
+              {hasActiveFilters && (
+                <span className="w-2 h-2 rounded-full bg-brand-600"></span>
+              )}
+            </button>
+          </div>
         </div>
+
+        {/* Filter Panel */}
+        {showFilters && (
+          <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-200 grid grid-cols-1 sm:grid-cols-4 gap-4 animate-in fade-in duration-150">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Event Type</label>
+              <select 
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="w-full text-sm border border-slate-300 rounded-md p-2 bg-white focus:outline-none focus:border-brand-500"
+              >
+                <option value="all">All Types</option>
+                <option value="pothole">Pothole</option>
+                <option value="road_defect">Road Defect</option>
+                <option value="congestion">Congestion</option>
+                <option value="vehicle_count">Vehicle Count</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Severity</label>
+              <select 
+                value={filterSeverity}
+                onChange={(e) => setFilterSeverity(e.target.value)}
+                className="w-full text-sm border border-slate-300 rounded-md p-2 bg-white focus:outline-none focus:border-brand-500"
+              >
+                <option value="all">All Severities</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Status</label>
+              <select 
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="w-full text-sm border border-slate-300 rounded-md p-2 bg-white focus:outline-none focus:border-brand-500"
+              >
+                <option value="all">All Statuses</option>
+                <option value="new">New</option>
+                <option value="under_review">Under Review</option>
+                <option value="verified">Verified</option>
+                <option value="resolved">Resolved</option>
+              </select>
+            </div>
+
+            <div className="flex items-end">
+              <button 
+                onClick={clearFilters}
+                disabled={!hasActiveFilters}
+                className="w-full py-2 px-3 text-sm font-medium border border-slate-200 text-slate-600 rounded-md hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Reset Filters
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-lg shadow border border-slate-200 overflow-hidden">
@@ -168,6 +302,7 @@ export default function EventPage() {
                   {['new', 'under_review', 'verified', 'resolved'].map(status => (
                     <button 
                       key={status}
+                      onClick={() => handleStatusUpdate(selectedEvent.event_id, status)}
                       className={`px-3 py-1.5 rounded text-sm font-medium capitalize border ${
                         selectedEvent.status === status 
                           ? 'border-brand-500 bg-brand-50 text-brand-700'
