@@ -1,0 +1,22 @@
+# Vehicle AI — Traffic Detection
+# Dependencies for edge-ai/traffic-detection/
+#
+# Install with:
+#   pip install -r requirements.txt
+
+# Core AI / detection
+ultralytics>=8.0.0          # YOLOv8 (auto-downloads pretrained weights on first run)
+
+# Computer vision
+opencv-python>=4.8.0        # video I/O + drawing
+
+# Numerical
+numpy>=1.24.0
+scipy>=1.10.0               # Hungarian algorithm for SORT tracker
+
+# Kalman filter (SORT tracker)
+filterpy>=1.4.5
+
+# Optional — for GPU acceleration (uncomment if CUDA is available)
+# torch>=2.0.0
+# torchvision>=0.15.0
