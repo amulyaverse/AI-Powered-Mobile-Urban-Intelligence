@@ -12,14 +12,19 @@ export default function Overview() {
 
   useEffect(() => {
     async function loadData() {
-      const m = await getKPIMetrics();
-      const e = await getEvents();
-      const a = await getSystemAlerts();
+      const [m, e, a] = await Promise.all([
+        getKPIMetrics(),
+        getEvents(),
+        getSystemAlerts(),
+      ]);
       setMetrics(m);
-      setRecentEvents(e); // Passing all to minimap
+      setRecentEvents(e);
       setAlerts(a);
     }
     loadData();
+    // Poll every 10 seconds for live updates
+    const interval = setInterval(loadData, 10_000);
+    return () => clearInterval(interval);
   }, []);
 
   if (!metrics) return <div className="p-4">Loading data...</div>;
@@ -47,7 +52,13 @@ export default function Overview() {
 
         {/* System Alerts */}
         <div className="lg:col-span-1 h-[400px]">
-          <AlertPanel alerts={alerts} />
+          <AlertPanel
+            alerts={alerts}
+            onAcknowledge={(id) => {
+              setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, acknowledged: true } : a)));
+              setMetrics((prev) => (prev ? { ...prev, criticalAlerts: Math.max(0, prev.criticalAlerts - 1) } : prev));
+            }}
+          />
         </div>
       </div>
 

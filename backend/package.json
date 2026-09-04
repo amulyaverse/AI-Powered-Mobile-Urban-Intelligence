@@ -1,0 +1,10 @@
+{
+  "name": "urban-intelligence-backend",
+  "version": "1.0.0",
+  "description": "FastAPI Backend for AI-Powered Mobile Urban Intelligence",
+  "scripts": {
+    "seed": "python seed_rich.py",
+    "test": "pytest tests/ -v",
+    "dev": "uvicorn app.main:app --reload --port 8000"
+  }
+}

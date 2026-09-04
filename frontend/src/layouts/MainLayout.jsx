@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, RadioReceiver, Map, AlertTriangle, Activity, Settings, Bus } from 'lucide-react';
+import { LayoutDashboard, RadioReceiver, Map, AlertTriangle, Activity, Settings, Bus, X, Shield, Server, Bell, Sliders } from 'lucide-react';
 
 const navItems = [
   { path: '/', label: 'Overview', icon: LayoutDashboard },
@@ -12,6 +12,10 @@ const navItems = [
 ];
 
 export default function MainLayout() {
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [soundAlerts, setSoundAlerts] = useState(true);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+
   return (
     <div className="flex h-screen w-full bg-slate-50 font-sans text-slate-900">
       {/* Sidebar */}
@@ -47,10 +51,14 @@ export default function MainLayout() {
         <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6">
           <h1 className="font-semibold text-lg text-slate-800">Command Center</h1>
           <div className="flex items-center gap-4">
-            <button className="text-slate-500 hover:text-slate-700">
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="text-slate-500 hover:text-slate-800 transition p-1 rounded-md hover:bg-slate-100 cursor-pointer"
+              title="Platform Settings"
+            >
               <Settings className="w-5 h-5" />
             </button>
-            <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center font-bold text-slate-600">
+            <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center font-bold text-slate-600 text-xs shadow-inner">
               AD
             </div>
           </div>
@@ -61,6 +69,101 @@ export default function MainLayout() {
           <Outlet />
         </main>
       </div>
+
+      {/* Settings Modal */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150 border border-slate-200">
+            <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+              <div className="flex items-center gap-2">
+                <Settings className="w-5 h-5 text-slate-700" />
+                <h3 className="font-bold text-slate-800">Platform Settings</h3>
+              </div>
+              <button
+                onClick={() => setIsSettingsOpen(false)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded hover:bg-slate-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5 text-sm">
+              <div>
+                <h4 className="font-semibold text-slate-800 mb-2 flex items-center gap-2">
+                  <Server className="w-4 h-4 text-brand-600" />
+                  API Gateway
+                </h4>
+                <div className="p-3 bg-slate-50 rounded border border-slate-200 font-mono text-xs text-slate-600 break-all">
+                  {import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-semibold text-slate-800 mb-2 flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-brand-600" />
+                  Inference & Telemetry
+                </h4>
+                <div className="space-y-2 text-slate-600">
+                  <div className="flex justify-between items-center">
+                    <span>Min Confidence Threshold:</span>
+                    <span className="font-semibold text-slate-800">65% (0.65)</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span>Hotspot Cluster Radius:</span>
+                    <span className="font-semibold text-slate-800">50 meters</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span>GPS Telemetry Polling:</span>
+                    <span className="font-semibold text-slate-800">5 seconds</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200 pt-4 space-y-3">
+                <h4 className="font-semibold text-slate-800 mb-2 flex items-center gap-2">
+                  <Bell className="w-4 h-4 text-brand-600" />
+                  Preferences
+                </h4>
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-slate-700">Live Auto-Refresh Polling</span>
+                  <input
+                    type="checkbox"
+                    checked={autoRefresh}
+                    onChange={(e) => setAutoRefresh(e.target.checked)}
+                    className="rounded text-brand-600 focus:ring-brand-500 w-4 h-4"
+                  />
+                </label>
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-slate-700">Audio alerts on Critical Hotspots</span>
+                  <input
+                    type="checkbox"
+                    checked={soundAlerts}
+                    onChange={(e) => setSoundAlerts(e.target.checked)}
+                    className="rounded text-brand-600 focus:ring-brand-500 w-4 h-4"
+                  />
+                </label>
+              </div>
+
+              <div className="border-t border-slate-200 pt-4 flex items-center justify-between text-xs text-slate-500">
+                <span className="flex items-center gap-1">
+                  <Shield className="w-3.5 h-3.5 text-emerald-600" /> Operator: Authority Admin
+                </span>
+                <span>SIH 2026 v1.0.0</span>
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+              <button
+                onClick={() => setIsSettingsOpen(false)}
+                className="px-4 py-2 bg-slate-900 text-white rounded font-medium text-xs hover:bg-slate-800 transition cursor-pointer"
+              >
+                Close Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

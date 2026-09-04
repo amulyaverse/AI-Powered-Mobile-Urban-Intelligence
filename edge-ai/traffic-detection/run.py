@@ -24,6 +24,14 @@ import argparse
 import json
 import sys
 import os
+import datetime
+
+try:
+    import requests
+    _REQUESTS_AVAILABLE = True
+except ImportError:
+    _REQUESTS_AVAILABLE = False
+    print("[Warning] 'requests' not installed — backend posting disabled. Run: pip install requests")
 
 # Add parent dir to path if running from anywhere
 sys.path.insert(0, os.path.dirname(__file__))
@@ -84,6 +92,11 @@ def parse_args() -> argparse.Namespace:
         type=str, default=None, metavar="EVENTS.jsonl",
         help="Write events as JSONL to a file (one JSON object per line)",
     )
+    parser.add_argument(
+        "--backend-url",
+        type=str, default=None, metavar="URL",
+        help="POST events to this backend URL (e.g. http://localhost:8000). Requires 'requests'.",
+    )
     return parser.parse_args()
 
 
@@ -106,6 +119,7 @@ def main() -> None:
     print(f"  Show       : {args.show}")
     print(f"  Save to    : {args.save or 'disabled'}")
     print(f"  JSON out   : {args.json_out or 'disabled'}")
+    print(f"  Backend URL: {args.backend_url or 'disabled'}")
     print("=" * 60)
     print()
 
@@ -124,11 +138,51 @@ def main() -> None:
     if args.json_out:
         jsonl_file = open(args.json_out, "w", encoding="utf-8")
 
+    def post_to_backend(event) -> None:
+        """Convert a TrafficEvent to the unified event schema and POST to backend."""
+        if not args.backend_url or not _REQUESTS_AVAILABLE:
+            return
+        payload = {
+            "event_type": "vehicle_count",
+            "confidence": event.confidence,
+            "severity": _density_to_severity(event.density),
+            "bus_id": event.bus_id,
+            "camera_id": "CAM_FRONT",
+            "latitude": event.gps.lat,
+            "longitude": event.gps.lon,
+            "timestamp": event.timestamp_iso + "Z",
+            "evidence": None,
+            # Traffic-specific fields
+            "car_count": event.vehicle_counts.get("car", 0),
+            "bike_count": event.vehicle_counts.get("bike", 0),
+            "bus_count": event.vehicle_counts.get("bus", 0),
+            "truck_count": event.vehicle_counts.get("truck", 0),
+            "total_vehicles": event.total_vehicles,
+            "density": event.density,
+            "density_score": event.density_score,
+        }
+        try:
+            resp = requests.post(
+                f"{args.backend_url.rstrip('/')}/api/events",
+                json=payload,
+                timeout=5,
+            )
+            if resp.ok:
+                print(f"[Backend] Event posted → {resp.json().get('event_id')}")
+            else:
+                print(f"[Backend] POST failed {resp.status_code}: {resp.text[:120]}")
+        except Exception as exc:
+            print(f"[Backend] POST error: {exc}")
+
+    def _density_to_severity(density: str) -> str:
+        return {"LOW": "low", "MEDIUM": "medium", "HIGH": "high", "CRITICAL": "critical"}.get(density, "low")
+
     try:
         for event in pipeline.run():
             if jsonl_file:
                 jsonl_file.write(event.to_json(indent=None) + "\n")
                 jsonl_file.flush()
+            post_to_backend(event)
     finally:
         if jsonl_file:
             jsonl_file.close()

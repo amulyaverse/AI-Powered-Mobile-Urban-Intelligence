@@ -1,14 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { getRoadConditionAnalytics } from '../services/api';
+import { getRoadConditionAnalytics, getRoadSummary } from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LineChart, Line } from 'recharts';
 
 export default function RoadAnalytics() {
   const [data, setData] = useState(null);
+  const [summary, setSummary] = useState(null);
 
   useEffect(() => {
     async function loadData() {
-      const result = await getRoadConditionAnalytics();
-      setData(result);
+      try {
+        const [analyticsData, summaryData] = await Promise.all([
+          getRoadConditionAnalytics(),
+          getRoadSummary(),
+        ]);
+        setData(analyticsData);
+        setSummary(summaryData);
+      } catch (err) {
+        console.error('Failed to load road analytics:', err);
+      }
     }
     loadData();
   }, []);
@@ -23,25 +32,34 @@ export default function RoadAnalytics() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-lg shadow border border-slate-200">
           <p className="text-sm text-slate-500 font-medium">Total Potholes Detected</p>
-          <p className="text-3xl font-bold text-slate-800 mt-1">214</p>
-          <p className="text-xs text-slate-500 mt-1">Last 30 days</p>
+          <p className="text-3xl font-bold text-slate-800 mt-1">
+            {summary?.totalPotholes !== undefined ? summary.totalPotholes.toLocaleString() : '—'}
+          </p>
+          <p className="text-xs text-slate-500 mt-1">Verified fleet observations</p>
         </div>
         <div className="bg-white p-5 rounded-lg shadow border-slate-200 border-l-4 border-l-red-500">
           <p className="text-sm text-slate-500 font-medium">High Severity Issues</p>
-          <p className="text-3xl font-bold text-slate-800 mt-1">42</p>
-          <p className="text-xs text-rose-600 font-medium mt-1">Require immediate action</p>
+          <p className="text-3xl font-bold text-slate-800 mt-1">
+            {summary?.highSeverityIssues ?? '—'}
+          </p>
+          <p className="text-xs text-rose-600 font-medium mt-1">Require immediate maintenance</p>
         </div>
         <div className="bg-white p-5 rounded-lg shadow border border-slate-200">
           <p className="text-sm text-slate-500 font-medium">Persistent Defects</p>
-          <p className="text-3xl font-bold text-slate-800 mt-1">18</p>
-          <p className="text-xs text-slate-500 mt-1">Detected &gt;5 times</p>
+          <p className="text-3xl font-bold text-slate-800 mt-1">
+            {summary?.persistentDefects ?? '—'}
+          </p>
+          <p className="text-xs text-amber-600 font-medium mt-1">Clustered hotspot locations</p>
         </div>
         <div className="bg-white p-5 rounded-lg shadow border border-slate-200">
           <p className="text-sm text-slate-500 font-medium">Resolved Defects</p>
-          <p className="text-3xl font-bold text-emerald-600 mt-1">56</p>
-          <p className="text-xs text-emerald-700 font-medium mt-1">This month</p>
+          <p className="text-3xl font-bold text-emerald-600 mt-1">
+            {summary?.resolvedDefects ?? '—'}
+          </p>
+          <p className="text-xs text-emerald-700 font-medium mt-1">Closed action items</p>
         </div>
       </div>
+
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Severity Distribution */}
