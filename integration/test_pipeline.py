@@ -2,8 +2,9 @@
 End-to-end smoke test for the integration pipeline.
 
 Start the backend first (in another terminal):
-    cd backend/api
-    uvicorn main:app --reload --port 8000
+    cd backend
+    uvicorn app.main:app --reload --port 8000
+
 
 Then run this from the repo root:
     python integration/test_pipeline.py

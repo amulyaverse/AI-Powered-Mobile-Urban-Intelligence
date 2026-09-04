@@ -33,6 +33,9 @@ def _upsert_bus(db: Session, event_data: EventCreate) -> None:
     Auto-register a bus if it has not been seen before.
     Updates GPS and traffic level on every event received.
     """
+    if not event_data.bus_id:
+        return
+
     bus = db.query(Bus).filter(Bus.id == event_data.bus_id).first()
     if not bus:
         bus = Bus(id=event_data.bus_id, route=None)
@@ -56,7 +59,7 @@ def ingest_event(payload: EventCreate, db: Session = Depends(get_db)):
 
     - Validates confidence threshold
     - Auto-registers or updates the reporting bus
-    - Persists the event
+    - Persists the event (preserving client-assigned event_id if provided)
     - Triggers hotspot clustering logic for road-damage events
     """
     # Reject low-confidence events
@@ -70,9 +73,12 @@ def ingest_event(payload: EventCreate, db: Session = Depends(get_db)):
     _upsert_bus(db, payload)
     db.flush()
 
+    assigned_id = payload.event_id or f"EVT_{uuid.uuid4().hex[:8]}"
+    assigned_status = payload.status or "new"
+
     # Persist the event
     event = Event(
-        event_id=str(uuid.uuid4()),
+        event_id=assigned_id,
         event_type=payload.event_type,
         confidence=payload.confidence,
         severity=payload.severity,
@@ -82,7 +88,7 @@ def ingest_event(payload: EventCreate, db: Session = Depends(get_db)):
         longitude=payload.longitude,
         timestamp=payload.timestamp,
         evidence=payload.evidence,
-        status="new",
+        status=assigned_status,
         repeated_detections=1,
         # Traffic-specific fields
         car_count=payload.car_count,
@@ -92,6 +98,8 @@ def ingest_event(payload: EventCreate, db: Session = Depends(get_db)):
         total_vehicles=payload.total_vehicles,
         density=payload.density,
         density_score=payload.density_score,
+        source_frame=payload.source_frame,
+        frame_coverage_ratio=payload.frame_coverage_ratio,
     )
     db.add(event)
     db.flush()  # Assign event_id before hotspot logic

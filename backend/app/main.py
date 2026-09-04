@@ -17,11 +17,13 @@ Visit the interactive API docs at: http://localhost:8000/docs
 """
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.config import get_settings
-from app.database import engine, Base, SessionLocal
+from app.database import engine, Base, SessionLocal, get_db, migrate_db
 from app.models import Bus, Event, Hotspot, SystemAlert   # noqa — ensure models are registered
 from app.seed import run_seed
 from app.routers import events, buses, analytics, hotspots
@@ -31,8 +33,9 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Create tables and seed data on startup."""
+    """Create tables, run migrations, and seed data on startup."""
     Base.metadata.create_all(bind=engine)
+    migrate_db(engine)
     db = SessionLocal()
     try:
         run_seed(db)
@@ -74,8 +77,14 @@ app.include_router(hotspots.router)
 
 # ── Health check ──────────────────────────────────────────────────────────────
 @app.get("/", tags=["Health"])
-def root():
-    return {"status": "ok", "service": settings.APP_NAME, "version": settings.APP_VERSION}
+def root(db: Session = Depends(get_db)):
+    events_count = db.query(func.count(Event.event_id)).scalar() or 0
+    return {
+        "status": "ok",
+        "service": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+        "events_stored": events_count,
+    }
 
 
 @app.get("/health", tags=["Health"])
