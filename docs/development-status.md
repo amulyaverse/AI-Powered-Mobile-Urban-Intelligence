@@ -1,15 +1,15 @@
 # Development Status
 
-> Last updated: 5 September 2026. Update this file as module status changes.
+> Last updated: 5 September 2026. Synchronized with GitHub Issues & Pull Requests.
 
-| Module | Owner | Status | Next Deliverable |
-|--------|-------|--------|-----------------|
-| Traffic AI | Pranav | ✅ Complete | Benchmarking & video pipeline integration (PR #29 merged) |
-| Road AI | Abhinandan | 🟡 In Progress | Pothole detection model running on sample images |
-| Backend | Arjun | 🔵 Planned | Events API (`POST` + `GET /api/events`) |
-| Frontend / GIS | Advika | ✅ Complete | Prepare API integration (replace mock data) |
-| Edge / Integration | Parminder | 🟡 In Progress | Video stream + event pipeline integration |
-| System Integration | Team Lead | 🟡 In Progress | Architecture, end-to-end integration & submission |
+| Module | Owner | Status | Resolved Tasks | Next Deliverable |
+|--------|-------|--------|----------------|-----------------|
+| **Traffic AI** | Pranav | ✅ Complete | #1, #2, #3 | Video dataset benchmarking (PR #29 merged) |
+| **Backend & Database** | Arjun | ✅ Complete | #7, #8, #9, #10, #11, #21, #22 | Cloud deployment & persistent storage (PR #30, #32 merged) |
+| **Edge & Integration** | Parminder | ✅ Complete | #16, #17, #18, #19, #20 | Multi-model pipeline integration (PR #31 merged) |
+| **Frontend / GIS** | Advika | 🟡 In Progress | #12 | Connect GIS Map & Analytics to live Backend API (#13, #14, #15) |
+| **Road AI (Potholes)** | Abhinandan | 🟡 In Progress | — | Pothole detection model prototype (#4, #5, #6) |
+| **System Integration** | Team Lead | 🟡 In Progress | #20, #21, #22 | End-to-end full system testing & submission materials (#23–#28) |
 
 ---
 
@@ -17,68 +17,39 @@
 
 | Icon | Meaning |
 |------|---------|
-| ✅ | Complete / working |
-| 🟡 | In progress |
-| 🔵 | Planned — not started |
+| ✅ | Complete / Merged & Verified |
+| 🟡 | In Progress / Active |
+| 🔵 | Planned |
 | 🔴 | Blocked |
 
 ---
 
-## Traffic AI (Vehicle Detection Pipeline)
+## Module Progress Details
 
-The Vehicle AI pipeline is **complete and merged** (PR #29).
+### 1. Traffic AI (Vehicle Detection Pipeline) — ✅ Complete
+- **PR:** #29 (`feat(member1): Vehicle AI pipeline`)
+- **Resolved Issues:** #1, #2, #3
+- **Source:** [`edge-ai/traffic-detection/`](../edge-ai/traffic-detection/) · Documentation: [`docs/models/traffic-ai.md`](models/traffic-ai.md)
+- **Features:** YOLOv8 vehicle detection & classification, SORT Kalman tracker, line-crossing counting, traffic density estimation (`LOW`/`MEDIUM`/`HIGH`/`CRITICAL`), and live HUD stream.
 
-- **Implementation Location:** `edge-ai/traffic-detection/`
-- **Full Specs:** See [`docs/models/traffic-ai.md`](models/traffic-ai.md)
-- **Features Implemented:**
-  - YOLOv8 vehicle detection & classification (`car`, `bike`, `bus`, `truck`) in `detector.py`
-  - SORT tracker with Kalman Filtering + Hungarian matching in `tracker.py`
-  - Directional line-crossing counting in `counter.py`
-  - Real-time traffic density estimation (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`) in `density_estimator.py`
-  - Standardized JSON `TrafficEvent` snapshot generation in `event_schema.py`
-  - CLI runner supporting webcam, video files, headless mode, and video export in `run.py`
+### 2. Backend API & Database Engine — ✅ Complete
+- **PR:** #30, #32 (`feat(backend): schemas, routers, DB auto-migration, spatial clustering`)
+- **Resolved Issues:** #7, #8, #9, #10, #11, #21, #22
+- **Source:** [`backend/app/`](../backend/app/)
+- **Features:** FastAPI server, SQLAlchemy DB schema with auto-migrations, `POST /api/events`, `GET /api/events` (with query filtering), aggregated analytics endpoints (`/api/analytics/*`), 50-meter spatial clustering service (`hotspot_service.py`), and dynamic maintenance priority scoring.
 
-**Next step for Pranav:** Run benchmark evaluations on recorded bus video clips and assist Parminder with multi-model edge integration.
+### 3. Edge Pipeline & Integration Layer — ✅ Complete
+- **PR:** #31 (`Add integration layer: event wrapper, GPS simulator, pipeline test`)
+- **Resolved Issues:** #16, #17, #18, #19, #20
+- **Source:** [`integration/`](../integration/) · Documentation: [`docs/architecture/integration-layer.md`](architecture/integration-layer.md)
+- **Features:** GPS trajectory simulation (`sample_route.csv`), standardized `EventGenerator` (enforcing confidence thresholds and UTC timestamps), HTTP client with retry logic, and end-to-end runner (`run_traffic_pipeline.py`).
 
----
+### 4. Frontend & GIS Dashboard — 🟡 In Progress
+- **Resolved Issues:** #12 (Deployed Prototype)
+- **Active Issues:** #13, #14, #15
+- **Live Prototype:** [ai-powered-mobile-urban-intelligenc.vercel.app](https://ai-powered-mobile-urban-intelligenc.vercel.app/)
+- **Next Step:** Update `frontend/src/services/api.js` to fetch live data from `http://localhost:8000/api/events` and `/api/hotspots`.
 
-## Frontend / GIS Platform
-
-The React/Vite frontend prototype is **complete and deployed**.
-
-- **Live URL:** https://ai-powered-mobile-urban-intelligenc.vercel.app/
-- **State:** Running on mock data representing the final JSON event schema.
-- **Routes:** Overview, Live Monitoring, Events & Incidents, GIS Map, Traffic Analytics, Road Analytics.
-- **Service Layer:** `frontend/src/services/api.js` ready to swap mock data with backend API endpoints.
-
-**Next step for Advika:** When the backend API is ready, point `src/services/api.js` to `VITE_API_BASE_URL`.
-
----
-
-## Road AI (Pothole & Defect Detection)
-
-**Next steps for Abhinandan:**
-1. Choose and benchmark pothole/road damage dataset (RDD2022 / Pothole-600)
-2. Train/fine-tune detection model in `edge-ai/pothole-detection/`
-3. Compute severity estimate from bounding box area and confidence
-4. Output standard event dictionary matching `docs/api/event-schema.md`
-
----
-
-## Backend & Database
-
-**Next steps for Arjun:**
-1. Set up FastAPI project in `backend/api/`
-2. Implement event database schema (PostgreSQL / SQLite) based on `docs/api/event-schema.md`
-3. Implement `POST /api/events` and `GET /api/events`
-4. Add spatial clustering logic for persistent defect hotspots (`GET /api/hotspots`)
-5. Enable CORS headers for frontend integration
-
----
-
-## Edge & Integration
-
-**Next steps for Parminder:**
-1. Connect Traffic AI (`edge-ai/traffic-detection/pipeline.py`) and upcoming Road AI into unified edge runner
-2. Attach simulated GPS coordinates from CSV trace
-3. Send generated events via HTTP `POST /api/events` to Arjun's backend
+### 5. Road AI (Pothole & Defect Detection) — 🟡 In Progress
+- **Active Issues:** #4, #5, #6
+- **Next Step:** Benchmark pothole datasets (RDD2022 / Pothole-600) and train YOLOv8 model in `edge-ai/pothole-detection/`.
