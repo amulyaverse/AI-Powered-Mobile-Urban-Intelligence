@@ -23,16 +23,42 @@ router = APIRouter(tags=["Hotspots & Alerts"])
 @router.get("/api/hotspots", response_model=List[HotspotResponse])
 def list_hotspots(
     status: Optional[str] = Query(default="active", description="active | resolved | all"),
+    min_reports: int = Query(default=1, description="Filter hotspots with at least this many reports"),
+    radius_m: Optional[float] = Query(default=None, description="Stub compatibility parameter"),
     db: Session = Depends(get_db),
 ):
     """
     Return persistent detection hotspots.
     Ordered by priority_score descending — highest-priority issues first.
+    Includes both GIS map properties and integration contract properties
+    (latitude, longitude, report_count, max_severity, event_ids).
     """
     q = db.query(Hotspot)
     if status and status != "all":
         q = q.filter(Hotspot.status == status)
-    return q.order_by(Hotspot.priority_score.desc()).all()
+    if min_reports > 1:
+        q = q.filter(Hotspot.detection_count >= min_reports)
+
+    hotspots = q.order_by(Hotspot.priority_score.desc()).all()
+    results = []
+    for h in hotspots:
+        event_ids = [e.event_id for e in h.events] if h.events else []
+        results.append(
+            HotspotResponse(
+                id=h.id,
+                center_lat=h.center_lat,
+                center_lng=h.center_lng,
+                event_type=h.event_type,
+                detection_count=h.detection_count,
+                severity=h.severity,
+                priority_score=h.priority_score,
+                first_seen=h.first_seen,
+                last_seen=h.last_seen,
+                status=h.status,
+                event_ids=event_ids,
+            )
+        )
+    return results
 
 
 @router.get("/api/alerts", response_model=List[SystemAlertResponse])

@@ -7,19 +7,27 @@ All response shapes are designed to match the frontend mock data structures
 in frontend/src/data/mockData.js exactly — so the frontend needs zero changes.
 """
 
+from __future__ import annotations
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional, Dict
+
 
 
 # ── KPI Summary ──────────────────────────────────────────────────────────────
 
 class KPIMetrics(BaseModel):
-    """Response for GET /api/analytics/summary — powers the Overview KPI cards."""
+    """Response for GET /api/analytics/summary — powers the Overview KPI cards & integration callers."""
     activeBuses: int
     eventsToday: int
     potholesDetected: int
     trafficHotspots: int
     criticalAlerts: int
+
+    # Integration stub / docs contract compatibility
+    total_events: Optional[int] = None
+    by_type: Optional[dict[str, int]] = None
+    by_severity: Optional[dict[str, int]] = None
+
 
 
 # ── Traffic Analytics ────────────────────────────────────────────────────────

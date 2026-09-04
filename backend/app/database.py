@@ -41,3 +41,21 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def migrate_db(eng):
+    """
+    Idempotent, lightweight schema migration helper for SQLite/PostgreSQL.
+    Ensures newly added columns exist without requiring manual migration steps.
+    """
+    from sqlalchemy import inspect, text
+    inspector = inspect(eng)
+    if "events" in inspector.get_table_names():
+        columns = {col["name"] for col in inspector.get_columns("events")}
+        with eng.connect() as conn:
+            if "source_frame" not in columns:
+                conn.execute(text("ALTER TABLE events ADD COLUMN source_frame INTEGER"))
+            if "frame_coverage_ratio" not in columns:
+                conn.execute(text("ALTER TABLE events ADD COLUMN frame_coverage_ratio FLOAT"))
+            conn.commit()
+

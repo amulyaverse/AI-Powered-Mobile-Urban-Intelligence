@@ -93,25 +93,87 @@ SEED_ALERTS = [
 ]
 
 
+def seed_traffic_telemetry(db: Session) -> None:
+    """
+    Seed 24-hour vehicle count snapshots across active bus routes
+    if none exist, ensuring Traffic Analytics charts always have rich data.
+    """
+    import random
+    if db.query(Event).filter(Event.event_type == "vehicle_count").count() > 0:
+        return
+
+    print("[Seed] Seeding 24-hour traffic telemetry snapshots...")
+    now = datetime.now(timezone.utc)
+    buses = db.query(Bus).filter(Bus.status == "Active").all()
+    if not buses:
+        buses = SEED_BUSES[:4]
+
+    for b in buses:
+        for h in range(24):
+            snap_time = now - timedelta(hours=23 - h, minutes=random.randint(5, 50))
+            hour = snap_time.hour
+
+            if 7 <= hour <= 10:
+                density, score = "HIGH", round(random.uniform(0.72, 0.88), 2)
+                cars, bikes, bc, trucks = random.randint(45, 70), random.randint(25, 45), random.randint(4, 8), random.randint(2, 5)
+            elif 17 <= hour <= 21:
+                density, score = "CRITICAL", round(random.uniform(0.85, 0.95), 2)
+                cars, bikes, bc, trucks = random.randint(55, 80), random.randint(35, 55), random.randint(5, 10), random.randint(2, 5)
+            elif 11 <= hour <= 16:
+                density, score = "MEDIUM", round(random.uniform(0.40, 0.65), 2)
+                cars, bikes, bc, trucks = random.randint(25, 40), random.randint(15, 25), random.randint(2, 5), random.randint(1, 3)
+            else:
+                density, score = "LOW", round(random.uniform(0.15, 0.30), 2)
+                cars, bikes, bc, trucks = random.randint(8, 18), random.randint(4, 10), random.randint(1, 2), random.randint(0, 2)
+
+            total_v = cars + bikes + bc + trucks
+            evt = Event(
+                event_id=f"TRF_{b.id}_{h:02d}",
+                event_type="vehicle_count",
+                confidence=round(random.uniform(0.88, 0.98), 2),
+                severity="low" if density == "LOW" else ("medium" if density == "MEDIUM" else "high"),
+                bus_id=b.id,
+                camera_id="CAM_FRONT",
+                latitude=round((b.last_lat or 28.6139) + random.uniform(-0.002, 0.002), 6),
+                longitude=round((b.last_lng or 77.2090) + random.uniform(-0.002, 0.002), 6),
+                timestamp=snap_time,
+                evidence="https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&q=80&w=400",
+                status="verified",
+                repeated_detections=1,
+                car_count=cars,
+                bike_count=bikes,
+                bus_count=bc,
+                truck_count=trucks,
+                total_vehicles=total_v,
+                density=density,
+                density_score=score,
+            )
+            db.merge(evt)
+
+    db.commit()
+    print("[Seed] Traffic telemetry snapshots seeded successfully.")
+
+
 def run_seed(db: Session) -> None:
     """
     Insert seed data only if the tables are empty.
     Safe to call on every startup.
     """
-    # Only seed if buses table is empty
-    if db.query(Bus).count() > 0:
-        return
+    # 1. Seed fleet and sample events if buses table is empty
+    if db.query(Bus).count() == 0:
+        print("[Seed] Seeding initial fleet and sample data...")
+        for bus in SEED_BUSES:
+            db.merge(bus)
 
-    print("[Seed] Seeding initial fleet and sample data...")
+        for event in SEED_EVENTS:
+            db.merge(event)
 
-    for bus in SEED_BUSES:
-        db.merge(bus)  # INSERT OR UPDATE
+        for alert in SEED_ALERTS:
+            db.merge(alert)
 
-    for event in SEED_EVENTS:
-        db.merge(event)
+        db.commit()
+        print(f"[Seed] Done — {len(SEED_BUSES)} buses, {len(SEED_EVENTS)} events, {len(SEED_ALERTS)} alerts seeded.")
 
-    for alert in SEED_ALERTS:
-        db.merge(alert)
+    # 2. Ensure traffic telemetry exists for analytics charts
+    seed_traffic_telemetry(db)
 
-    db.commit()
-    print(f"[Seed] Done — {len(SEED_BUSES)} buses, {len(SEED_EVENTS)} events, {len(SEED_ALERTS)} alerts seeded.")

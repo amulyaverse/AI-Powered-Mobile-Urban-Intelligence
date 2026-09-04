@@ -41,6 +41,8 @@ class Event(Base):
     total_vehicles = Column(Integer, nullable=True)
     density = Column(String(20), nullable=True)        # LOW | MEDIUM | HIGH | CRITICAL
     density_score = Column(Float, nullable=True)       # 0.0 – 1.0
+    source_frame = Column(Integer, nullable=True)      # frame index from edge-AI pipeline
+    frame_coverage_ratio = Column(Float, nullable=True) # fraction of frame area covered
 
     # Relationships
     bus = relationship("Bus", back_populates="events")
