@@ -56,6 +56,7 @@ runs/
 wandb/
 mlruns/
 *.csv
+!integration/gps/sample_route.csv
 !frontend/src/**/*.csv
 
 # ── OS / Editor ──────────────────────────────────────────────────────────────
