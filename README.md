@@ -56,17 +56,17 @@ By running AI inference **on the edge device**, only lightweight structured JSON
 
 The core features being developed for the SIH'26 prototype:
 
-| # | Feature | Module Area |
-|---|---------|-------------|
-| 1 | Vehicle detection, classification, and counting | Traffic AI |
-| 2 | Traffic density and congestion estimation | Traffic AI |
-| 3 | Pothole and road-defect detection | Road AI |
-| 4 | GPS + timestamp + confidence event generation | Edge / Integration |
-| 5 | Centralized backend REST API + database | Backend |
-| 6 | GIS dashboard with real-time event markers | Frontend |
-| 7 | Traffic and road condition analytics & heatmaps | Frontend |
-| 8 | Persistent / repeated defect detection across buses | Backend / Intelligence |
-| 9 | Maintenance priority scoring | Backend / Intelligence |
+| # | Feature | Module Area | Status |
+|---|---------|-------------|--------|
+| 1 | Vehicle detection, classification, and counting | Traffic AI | ✅ Complete |
+| 2 | Traffic density and congestion estimation | Traffic AI | ✅ Complete |
+| 3 | Pothole and road-defect detection | Road AI | 🟡 In Progress |
+| 4 | GPS + timestamp + confidence event generation | Edge / Integration | 🟡 In Progress |
+| 5 | Centralized backend REST API + database | Backend | 🔵 Planned |
+| 6 | GIS dashboard with real-time event markers | Frontend | ✅ Complete (Prototype) |
+| 7 | Traffic and road condition analytics & heatmaps | Frontend | ✅ Complete (Prototype) |
+| 8 | Persistent / repeated defect detection across buses | Backend / Intelligence | 🔵 Planned |
+| 9 | Maintenance priority scoring | Backend / Intelligence | 🔵 Planned |
 
 ---
 
@@ -109,11 +109,11 @@ The following features are **NOT** part of the current MVP and will not be imple
 |--------|--------|-------|
 | Project Setup | ✅ Complete | Repository structure, issue tracking, and documentation finalized |
 | Frontend Prototype | ✅ Complete | Deployed on Vercel with responsive GIS dashboard & mock data |
-| Traffic AI | 🟡 In Progress | Vehicle detection, classification & counting models |
+| Traffic AI | ✅ Complete | YOLOv8 vehicle detection, SORT tracking, line counting & density (PR #29) |
 | Road Damage AI | 🟡 In Progress | Pothole and road defect detection models |
-| Event Engine | 🟡 Planned | AI output to standardized schema conversion |
-| Backend API | 🟡 Planned | REST endpoints (`POST /api/events`, `GET /api/events`) |
-| Database | 🟡 Planned | Schema for events, hotspots, and fleet tracking |
+| Event Engine | 🟡 In Progress | TrafficEvent schema implemented; multi-model integration in progress |
+| Backend API | 🔵 Planned | REST endpoints (`POST /api/events`, `GET /api/events`) |
+| Database | 🔵 Planned | Schema for events, hotspots, and fleet tracking |
 | GIS Integration | 🟡 Planned | Connecting frontend service layer to backend API |
 | Full Deployment | 🟡 Planned | End-to-end cloud pipeline deployment |
 
@@ -195,7 +195,7 @@ AI-Powered-Mobile-Urban-Intelligence/
 │   │   └── layouts/        # MainLayout (Sidebar & navigation)
 │   └── package.json
 ├── edge-ai/
-│   ├── traffic-detection/  # Vehicle detection, counting & density estimation (Pranav)
+│   ├── traffic-detection/  # YOLOv8 detection, SORT tracking & density estimation (Pranav)
 │   └── pothole-detection/  # Pothole & road defect detection (Abhinandan)
 ├── backend/
 │   ├── api/                # REST API endpoints (Arjun)
@@ -210,6 +210,8 @@ AI-Powered-Mobile-Urban-Intelligence/
 │   │   └── event-schema.md # Single source of truth for event JSON contract
 │   ├── architecture/
 │   │   └── system-architecture.md # Detailed architecture specification
+│   ├── models/
+│   │   └── traffic-ai.md          # Full documentation for Traffic AI module
 │   ├── project-management.md      # Team roles, development principles & milestones
 │   ├── development-status.md      # Current module status & next deliverables
 │   └── project-board.md           # Task board and issue tracking mapping
@@ -261,7 +263,37 @@ npm run preview
 
 ---
 
-### 2. Backend Setup *(Planned / In Progress)*
+### 2. Traffic AI Setup & Execution (Computer Vision)
+
+The Vehicle AI pipeline can be run on live webcam feeds, video files, or headless mode.
+
+#### Prerequisites & Installation
+```bash
+# Install dependencies from project root
+pip install -r edge-ai/traffic-detection/requirements.txt
+```
+
+#### Running on Live Webcam Feed
+```bash
+cd edge-ai/traffic-detection
+python run.py --source 0 --show
+```
+
+#### Running on a Video File with Live Window & Video Export
+```bash
+python run.py --source /path/to/traffic.mp4 --show --save output.mp4
+```
+
+#### Running Headless Mode (Stream JSON Events)
+```bash
+python run.py --source traffic.mp4 --bus-id BUS-042 --json-out events.jsonl
+```
+
+> See [`docs/models/traffic-ai.md`](docs/models/traffic-ai.md) for full module architecture, SORT tracking parameters, and custom confidence threshold configurations.
+
+---
+
+### 3. Backend Setup *(Planned / In Progress)*
 
 > 🚧 **Status:** The backend API module is currently under development.  
 > Detailed setup instructions, environment variables, and virtual environment steps will be updated here upon completion of the backend milestone.
@@ -272,26 +304,16 @@ npm run preview
 
 ---
 
-### 3. Edge AI & Inference Pipeline Setup *(Planned / In Progress)*
-
-> 🚧 **Status:** AI model training and inference pipelines are currently under development.  
-> Instructions for downloading model weights, running inference on recorded video clips, and streaming events will be provided here once the Edge AI module is finalized.
-
-- **Planned Frameworks:** PyTorch, Ultralytics YOLOv8, OpenCV
-- **Source Code Location:** [`edge-ai/`](edge-ai/) and [`integration/`](integration/)
-
----
-
 ## Team & Suggested Ownership
 
 > **Note:** These are initial suggested ownership areas. Team members actively collaborate, cross-review code, and support integration across modules.
 
 | Member | Primary Ownership | Core Deliverables |
 |--------|-------------------|-------------------|
-| **Pranav** | Traffic AI / Computer Vision | Vehicle detection, counting & density estimation |
+| **Pranav** | Traffic AI / Computer Vision | Vehicle detection, counting & density estimation (Completed) |
 | **Abhinandan** | ML / Road-Damage AI | Pothole detection, road defect classification & severity scoring |
 | **Arjun** | Backend / Database | REST API, database schema, persistent defect clustering |
-| **Advika** | Frontend / GIS | Dashboard API integration, GIS visualization & heatmaps |
+| **Advika** | Frontend / GIS | Dashboard API integration, GIS visualization & heatmaps (Prototype Live) |
 | **Parminder** | Edge AI / Integration | Video ingestion pipeline, GPS simulation & event generator |
 | **Team Lead** | System Integration & Coordination | Architecture, end-to-end integration, documentation, PPT & submission |
 
@@ -303,6 +325,7 @@ npm run preview
 |------|-----------------|--------|
 | GitHub Repository | Source code, docs & setup instructions | ✅ Live & Updated |
 | Live Prototype | Web deployment of GIS dashboard | ✅ [Live on Vercel](https://ai-powered-mobile-urban-intelligenc.vercel.app/) |
+| Traffic AI Pipeline | Live vehicle detection & density stream | ✅ [Implemented](docs/models/traffic-ai.md) |
 | 6-Page PPT | Official SIH presentation slide deck | 🟡 Planned (`presentation/`) |
 | Demo Video | 3–5 min video walkthrough with voiceover | 🟡 Planned (`demo/`) |
 | Hardware / Edge Docs | Edge architecture & simulation guide | 🟡 Documented in `docs/architecture/` |
@@ -316,6 +339,7 @@ Detailed specifications and collaboration guidelines are organized under `docs/`
 
 - **[Event Schema & API Contract](docs/api/event-schema.md)** — The standardized event JSON schema shared across all modules.
 - **[System Architecture](docs/architecture/system-architecture.md)** — In-depth architectural design, data flows, and edge computing rationale.
+- **[Traffic AI Module Documentation](docs/models/traffic-ai.md)** — Full specification and parameters for the Vehicle AI pipeline.
 - **[Project Management](docs/project-management.md)** — Team principles, role descriptions, and daily milestone roadmap.
 - **[Development Status](docs/development-status.md)** — Granular tracking of module completion and active deliverables.
 - **[Project Task Board](docs/project-board.md)** — Task inventory mapped to GitHub issues and priority tiers.
