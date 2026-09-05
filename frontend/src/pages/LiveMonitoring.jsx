@@ -1,53 +1,77 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { getBuses, getEvents } from '../services/api';
-import { Truck, Video, SignalHigh, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Video, SignalHigh, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { formatDistanceToNow, isValid } from 'date-fns';
+import { LoadingState, ErrorState } from '../components/PageStatusState';
 
 export default function LiveMonitoring() {
   const [buses, setBuses] = useState([]);
   const [selectedBus, setSelectedBus] = useState(null);
   const [latestDetection, setLatestDetection] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const loadData = useCallback(async (isInitial = false) => {
+    if (isInitial) setLoading(true);
+    try {
+      const data = await getBuses();
+      const safeBuses = Array.isArray(data) ? data : [];
+      setBuses(safeBuses);
+      if (safeBuses.length > 0) {
+        setSelectedBus((prev) => (prev ? safeBuses.find((b) => b.id === prev.id) || safeBuses[0] : safeBuses[0]));
+      }
+      setError(null);
+    } catch (err) {
+      console.error('[LiveMonitoring] Failed to load buses:', err);
+      setError(err.message || 'Failed to load fleet monitoring telemetry.');
+    } finally {
+      if (isInitial) setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    async function loadData() {
-      try {
-        const data = await getBuses();
-        setBuses(data);
-        if (data.length > 0) {
-          setSelectedBus((prev) => (prev ? data.find((b) => b.id === prev.id) || data[0] : data[0]));
-        }
-      } catch (err) {
-        console.error('Failed to load buses:', err);
-      }
-    }
-    loadData();
+    loadData(true);
     // Poll every 5 seconds for live GPS updates
-    const interval = setInterval(loadData, 5_000);
+    const interval = setInterval(() => loadData(false), 5_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [loadData]);
 
   useEffect(() => {
     async function loadLatestDetection() {
       if (!selectedBus) return;
       try {
         const evts = await getEvents({ bus_id: selectedBus.id, limit: 1 });
-        setLatestDetection(evts.length > 0 ? evts[0] : null);
+        setLatestDetection(evts && evts.length > 0 ? evts[0] : null);
       } catch (err) {
-        console.error('Failed to load latest detection:', err);
+        console.error('[LiveMonitoring] Failed to load latest detection:', err);
       }
     }
     loadLatestDetection();
   }, [selectedBus?.id]);
 
   const formatTimeAgo = (dateStr) => {
-    if (!dateStr) return 'Unknown';
+    if (!dateStr) return 'Just now';
     const d = new Date(dateStr);
     return isValid(d) ? formatDistanceToNow(d) : 'Just now';
   };
 
-  const currentLat = selectedBus ? (selectedBus.last_lat ?? selectedBus.lat ?? 0) : 0;
-  const currentLng = selectedBus ? (selectedBus.last_lng ?? selectedBus.lng ?? 0) : 0;
-  const currentTraffic = selectedBus ? (selectedBus.last_traffic ?? selectedBus.traffic ?? 'Unknown') : 'Unknown';
+  if (loading && buses.length === 0) {
+    return <LoadingState message="Connecting to live bus fleet telemetry..." />;
+  }
+
+  if (error && buses.length === 0) {
+    return (
+      <ErrorState
+        title="Fleet Telemetry Unavailable"
+        message="Could not connect to live bus telemetry feeds. You can retry the connection or switch to Demo Mode."
+        onRetry={() => loadData(true)}
+      />
+    );
+  }
+
+  const currentLat = selectedBus ? (selectedBus.last_lat ?? selectedBus.lat ?? 28.5639) : 28.5639;
+  const currentLng = selectedBus ? (selectedBus.last_lng ?? selectedBus.lng ?? 77.2090) : 77.2090;
+  const currentTraffic = selectedBus ? (selectedBus.last_traffic ?? selectedBus.traffic ?? 'Moderate') : 'Moderate';
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
@@ -55,50 +79,55 @@ export default function LiveMonitoring() {
       
       <div className="flex flex-1 gap-6 overflow-hidden">
         {/* Fleet List */}
-        <div className="w-1/3 bg-white rounded-lg shadow border border-slate-200 flex flex-col overflow-hidden">
-          <div className="p-4 border-b border-slate-200 bg-slate-50 font-semibold text-slate-700">
-            Active Fleet ({buses.length})
+        <div className="w-1/3 bg-white rounded-lg shadow-xs border border-slate-200 flex flex-col overflow-hidden">
+          <div className="p-4 border-b border-slate-200 bg-slate-50 font-semibold text-slate-700 flex justify-between items-center">
+            <span>Active Fleet</span>
+            <span className="text-xs bg-slate-200 px-2 py-0.5 rounded-full font-bold text-slate-700">{buses.length}</span>
           </div>
           <div className="flex-1 overflow-y-auto p-2 space-y-2">
-            {buses.map(bus => (
-              <button
-                key={bus.id}
-                onClick={() => setSelectedBus(bus)}
-                className={`w-full text-left p-3 rounded border transition-colors ${
-                  selectedBus?.id === bus.id 
-                    ? 'bg-brand-50 border-brand-200 shadow-sm' 
-                    : 'bg-white border-slate-100 hover:bg-slate-50'
-                }`}
-              >
-                <div className="flex justify-between items-center mb-1">
-                  <span className="font-bold text-slate-800">{bus.id}</span>
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                    bus.status === 'Active' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
-                  }`}>
-                    {bus.status}
-                  </span>
-                </div>
-                <div className="text-sm text-slate-500 mb-2">{bus.route}</div>
-                <div className="flex gap-4 text-xs text-slate-400 font-medium">
-                  <span className="flex items-center gap-1">
-                    <Video className="w-3 h-3" /> {bus.camera_status || bus.cameraStatus || 'Active'}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <SignalHigh className="w-3 h-3" /> {formatTimeAgo(bus.last_seen || bus.lastUpdate)} ago
-                  </span>
-                </div>
-              </button>
-            ))}
+            {buses.length === 0 ? (
+              <div className="p-4 text-center text-xs text-slate-400">No active vehicles reporting</div>
+            ) : (
+              buses.map(bus => (
+                <button
+                  key={bus.id}
+                  onClick={() => setSelectedBus(bus)}
+                  className={`w-full text-left p-3 rounded border transition-colors cursor-pointer ${
+                    selectedBus?.id === bus.id 
+                      ? 'bg-brand-50 border-brand-200 shadow-xs' 
+                      : 'bg-white border-slate-100 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-bold text-slate-800">{bus.id}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      bus.status === 'Active' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                    }`}>
+                      {bus.status || 'Active'}
+                    </span>
+                  </div>
+                  <div className="text-sm text-slate-500 mb-2">{bus.route || 'General Patrol'}</div>
+                  <div className="flex gap-4 text-xs text-slate-400 font-medium">
+                    <span className="flex items-center gap-1">
+                      <Video className="w-3 h-3" /> {bus.camera_status || bus.cameraStatus || 'Active'}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <SignalHigh className="w-3 h-3" /> {formatTimeAgo(bus.last_seen || bus.lastUpdate)} ago
+                    </span>
+                  </div>
+                </button>
+              ))
+            )}
           </div>
         </div>
 
         {/* Selected Bus Panel */}
         {selectedBus && (
-          <div className="flex-1 bg-white rounded-lg shadow border border-slate-200 flex flex-col overflow-hidden">
+          <div className="flex-1 bg-white rounded-lg shadow-xs border border-slate-200 flex flex-col overflow-hidden">
             <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
               <div>
                 <h3 className="font-bold text-lg text-slate-800">{selectedBus.id}</h3>
-                <p className="text-sm text-slate-500">{selectedBus.route}</p>
+                <p className="text-sm text-slate-500">{selectedBus.route || 'Patrol Unit'}</p>
               </div>
               <div className="flex items-center gap-2">
                 <span className="px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-full">
@@ -159,4 +188,3 @@ export default function LiveMonitoring() {
     </div>
   );
 }
-

@@ -1,28 +1,49 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { getRoadConditionAnalytics, getRoadSummary } from '../services/api';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LineChart, Line } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LineChart, Line, Cell } from 'recharts';
+import { LoadingState, ErrorState } from '../components/PageStatusState';
 
 export default function RoadAnalytics() {
   const [data, setData] = useState(null);
   const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const [analyticsData, summaryData] = await Promise.all([
-          getRoadConditionAnalytics(),
-          getRoadSummary(),
-        ]);
-        setData(analyticsData);
-        setSummary(summaryData);
-      } catch (err) {
-        console.error('Failed to load road analytics:', err);
-      }
+  const loadData = useCallback(async (isInitial = false) => {
+    if (isInitial) setLoading(true);
+    try {
+      const [analyticsData, summaryData] = await Promise.all([
+        getRoadConditionAnalytics(),
+        getRoadSummary(),
+      ]);
+      setData(analyticsData);
+      setSummary(summaryData);
+      setError(null);
+    } catch (err) {
+      console.error('[RoadAnalytics] Failed to load road analytics:', err);
+      setError(err.message || 'Failed to load road analytics.');
+    } finally {
+      if (isInitial) setLoading(false);
     }
-    loadData();
   }, []);
 
-  if (!data) return <div className="p-4">Loading analytics...</div>;
+  useEffect(() => {
+    loadData(true);
+  }, [loadData]);
+
+  if (loading && !data) {
+    return <LoadingState message="Loading road defect analytics and severity models..." />;
+  }
+
+  if (error && !data) {
+    return (
+      <ErrorState
+        title="Road Analytics Unavailable"
+        message="Could not load road condition charts. You can retry the connection or switch to Demo Mode."
+        onRetry={() => loadData(true)}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -30,28 +51,28 @@ export default function RoadAnalytics() {
       
       {/* Top Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-lg shadow border border-slate-200">
+        <div className="bg-white p-5 rounded-lg shadow-xs border border-slate-200">
           <p className="text-sm text-slate-500 font-medium">Total Potholes Detected</p>
           <p className="text-3xl font-bold text-slate-800 mt-1">
             {summary?.totalPotholes !== undefined ? summary.totalPotholes.toLocaleString() : '—'}
           </p>
           <p className="text-xs text-slate-500 mt-1">Verified fleet observations</p>
         </div>
-        <div className="bg-white p-5 rounded-lg shadow border-slate-200 border-l-4 border-l-red-500">
+        <div className="bg-white p-5 rounded-lg shadow-xs border-slate-200 border-l-4 border-l-red-500">
           <p className="text-sm text-slate-500 font-medium">High Severity Issues</p>
           <p className="text-3xl font-bold text-slate-800 mt-1">
             {summary?.highSeverityIssues ?? '—'}
           </p>
           <p className="text-xs text-rose-600 font-medium mt-1">Require immediate maintenance</p>
         </div>
-        <div className="bg-white p-5 rounded-lg shadow border border-slate-200">
+        <div className="bg-white p-5 rounded-lg shadow-xs border border-slate-200">
           <p className="text-sm text-slate-500 font-medium">Persistent Defects</p>
           <p className="text-3xl font-bold text-slate-800 mt-1">
             {summary?.persistentDefects ?? '—'}
           </p>
           <p className="text-xs text-amber-600 font-medium mt-1">Clustered hotspot locations</p>
         </div>
-        <div className="bg-white p-5 rounded-lg shadow border border-slate-200">
+        <div className="bg-white p-5 rounded-lg shadow-xs border border-slate-200">
           <p className="text-sm text-slate-500 font-medium">Resolved Defects</p>
           <p className="text-3xl font-bold text-emerald-600 mt-1">
             {summary?.resolvedDefects ?? '—'}
@@ -60,14 +81,13 @@ export default function RoadAnalytics() {
         </div>
       </div>
 
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Severity Distribution */}
-        <div className="bg-white p-5 rounded-lg shadow border border-slate-200">
+        <div className="bg-white p-5 rounded-lg shadow-xs border border-slate-200">
           <h3 className="font-semibold text-lg mb-4 text-slate-800">Defect Severity Distribution</h3>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.severityDistribution}>
+              <BarChart data={data?.severityDistribution || []}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b'}} />
                 <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b'}} />
@@ -76,8 +96,8 @@ export default function RoadAnalytics() {
                   contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
                 />
                 <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                  {data.severityDistribution.map((entry, index) => (
-                    <cell key={`cell-${index}`} fill={
+                  {(data?.severityDistribution || []).map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={
                       entry.name.includes('High') ? '#ef4444' : 
                       entry.name.includes('Medium') ? '#f59e0b' : '#10b981'
                     } />
@@ -89,11 +109,11 @@ export default function RoadAnalytics() {
         </div>
 
         {/* Defects Over Time */}
-        <div className="bg-white p-5 rounded-lg shadow border border-slate-200">
+        <div className="bg-white p-5 rounded-lg shadow-xs border border-slate-200">
           <h3 className="font-semibold text-lg mb-4 text-slate-800">Defect Reporting Trends</h3>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data.defectsOverTime}>
+              <LineChart data={data?.defectsOverTime || []}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill: '#64748b'}} />
                 <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b'}} />
