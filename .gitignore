@@ -77,8 +77,11 @@ Thumbs.db
 *.njsproj
 *.sln
 
-# ── Misc ─────────────────────────────────────────────────────────────────────
 *.tmp
 *.temp
 *.log
+test.db
+*.db
+!backend/urban_intelligence.db
+
 

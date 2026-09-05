@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     # ── CORS ──────────────────────────────────────────────────────────────────
     # Comma-separated list of allowed origins.
     # Add your Vercel frontend URL here for production.
-    ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:3000,https://ai-powered-mobile-urban-intelligenc.vercel.app"
+    ALLOWED_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,https://ai-powered-mobile-urban-intelligenc.vercel.app"
 
     # ── Hotspot Logic ─────────────────────────────────────────────────────────
     # Radius (metres) within which events are considered the same hotspot.
