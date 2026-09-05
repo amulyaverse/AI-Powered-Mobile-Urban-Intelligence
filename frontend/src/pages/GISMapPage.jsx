@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { getEvents, getHotspots } from '../services/api';
-import { Layers, Filter, Flame, Check } from 'lucide-react';
+import { Filter, Flame, Check } from 'lucide-react';
+import { LoadingState, ErrorState } from '../components/PageStatusState';
 
 // Fix for default marker icons in react-leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -37,26 +38,48 @@ export default function GISMapPage() {
   const [selectedType, setSelectedType] = useState('all');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [showHeatmap, setShowHeatmap] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   // Delhi coordinates as center
   const center = [28.6139, 77.2090];
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const query = selectedType !== 'all' ? { event_type: selectedType } : {};
-        const [eventsData, hotspotsData] = await Promise.all([
-          getEvents(query),
-          getHotspots('active'),
-        ]);
-        setEvents(eventsData);
-        setHotspots(hotspotsData);
-      } catch (err) {
-        console.error('Failed to load GIS data:', err);
-      }
+  const loadData = useCallback(async (isInitial = false) => {
+    if (isInitial) setLoading(true);
+    try {
+      const query = selectedType !== 'all' ? { event_type: selectedType } : {};
+      const [eventsData, hotspotsData] = await Promise.all([
+        getEvents(query),
+        getHotspots('active'),
+      ]);
+      setEvents(eventsData || []);
+      setHotspots(hotspotsData || []);
+      setError(null);
+    } catch (err) {
+      console.error('[GISMap] Failed to load GIS data:', err);
+      setError(err.message || 'Failed to load GIS map layer data.');
+    } finally {
+      if (isInitial) setLoading(false);
     }
-    loadData();
   }, [selectedType]);
+
+  useEffect(() => {
+    loadData(true);
+  }, [loadData]);
+
+  if (loading && events.length === 0 && hotspots.length === 0) {
+    return <LoadingState message="Loading GIS map layers and hotspot clusters..." />;
+  }
+
+  if (error && events.length === 0 && hotspots.length === 0) {
+    return (
+      <ErrorState
+        title="GIS Map Unavailable"
+        message="Could not load spatial map layers. You can retry the connection or switch to Demo Mode."
+        onRetry={() => loadData(true)}
+      />
+    );
+  }
 
   const getMarkerIcon = (type) => {
     if (type === 'pothole') return potholeIcon;
@@ -82,7 +105,7 @@ export default function GISMapPage() {
         <div>
           <h2 className="text-2xl font-bold text-slate-800">GIS Urban Intelligence Map</h2>
           <p className="text-xs text-slate-500">
-            Showing {events.length} events {showHeatmap && `· ${hotspots.length} persistent hotspot clusters`}
+            Showing {events.length} geo-tagged detections {showHeatmap && `· ${hotspots.length} persistent hotspot clusters`}
           </p>
         </div>
         <div className="flex gap-2 text-sm relative">
@@ -90,7 +113,7 @@ export default function GISMapPage() {
           <div className="relative">
             <button
               onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-              className={`px-4 py-2 border rounded-md font-medium flex items-center gap-2 transition-colors ${
+              className={`px-4 py-2 border rounded-md font-medium flex items-center gap-2 transition-colors cursor-pointer ${
                 selectedType !== 'all'
                   ? 'bg-brand-50 border-brand-500 text-brand-700'
                   : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
@@ -114,7 +137,7 @@ export default function GISMapPage() {
                       setSelectedType(opt.value);
                       setShowFilterDropdown(false);
                     }}
-                    className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center justify-between text-slate-700"
+                    className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center justify-between text-slate-700 cursor-pointer"
                   >
                     <span>{opt.label}</span>
                     {selectedType === opt.value && <Check className="w-4 h-4 text-brand-600" />}
@@ -127,7 +150,7 @@ export default function GISMapPage() {
           {/* Heatmap Layer Toggle */}
           <button
             onClick={() => setShowHeatmap(!showHeatmap)}
-            className={`px-4 py-2 border rounded-md font-medium flex items-center gap-2 transition-colors ${
+            className={`px-4 py-2 border rounded-md font-medium flex items-center gap-2 transition-colors cursor-pointer ${
               showHeatmap
                 ? 'bg-amber-50 border-amber-500 text-amber-800'
                 : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
@@ -139,7 +162,7 @@ export default function GISMapPage() {
         </div>
       </div>
 
-      <div className="flex-1 bg-white rounded-lg shadow border border-slate-200 overflow-hidden relative">
+      <div className="flex-1 bg-white rounded-lg shadow-xs border border-slate-200 overflow-hidden relative min-h-[400px]">
         <MapContainer center={center} zoom={12} className="w-full h-full">
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -150,11 +173,13 @@ export default function GISMapPage() {
           {showHeatmap &&
             hotspots.map((hs) => {
               const color = getHotspotColor(hs.severity);
-              const radius = Math.max(300, Math.min(750, hs.detection_count * 100));
+              const radius = Math.max(300, Math.min(750, (hs.detection_count || 3) * 100));
+              const lat = hs.center_lat ?? hs.latitude ?? center[0];
+              const lng = hs.center_lng ?? hs.longitude ?? center[1];
               return (
                 <Circle
                   key={`hotspot-${hs.id}`}
-                  center={[hs.center_lat, hs.center_lng]}
+                  center={[lat, lng]}
                   radius={radius}
                   pathOptions={{
                     color: color,
@@ -180,15 +205,15 @@ export default function GISMapPage() {
                       <div className="text-xs space-y-1 mb-2">
                         <p>
                           <span className="text-slate-500">Cluster Type:</span>{' '}
-                          <b className="capitalize">{hs.event_type.replace('_', ' ')}</b>
+                          <b className="capitalize">{(hs.event_type || 'pothole').replace('_', ' ')}</b>
                         </p>
                         <p>
                           <span className="text-slate-500">Observations:</span>{' '}
-                          <b className="text-red-600">{hs.detection_count} buses</b>
+                          <b className="text-red-600">{hs.detection_count || 1} buses</b>
                         </p>
                         <p>
                           <span className="text-slate-500">Priority Score:</span>{' '}
-                          <b>{hs.priority_score.toFixed(1)}</b>
+                          <b>{(hs.priority_score || 5).toFixed(1)}</b>
                         </p>
                       </div>
                     </div>
@@ -198,55 +223,59 @@ export default function GISMapPage() {
             })}
 
           {/* Event Markers */}
-          {events.map((event) => (
-            <Marker
-              key={event.event_id}
-              position={[event.latitude, event.longitude]}
-              icon={getMarkerIcon(event.event_type)}
-            >
-              <Popup>
-                <div className="p-1 min-w-[210px]">
-                  <h4 className="font-bold uppercase border-b pb-1 mb-2 flex justify-between items-center">
-                    <span>{event.event_type.replace('_', ' ')}</span>
-                    <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded ${
-                        event.severity === 'high'
-                          ? 'bg-red-100 text-red-700'
-                          : event.severity === 'medium'
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'bg-green-100 text-green-700'
-                      }`}
-                    >
-                      {event.severity}
-                    </span>
-                  </h4>
+          {events.map((event) => {
+            const lat = event.latitude ?? center[0];
+            const lng = event.longitude ?? center[1];
+            return (
+              <Marker
+                key={event.event_id}
+                position={[lat, lng]}
+                icon={getMarkerIcon(event.event_type)}
+              >
+                <Popup>
+                  <div className="p-1 min-w-[210px]">
+                    <h4 className="font-bold uppercase border-b pb-1 mb-2 flex justify-between items-center">
+                      <span>{event.event_type.replace('_', ' ')}</span>
+                      <span
+                        className={`text-[10px] px-1.5 py-0.5 rounded ${
+                          event.severity === 'high'
+                            ? 'bg-red-100 text-red-700'
+                            : event.severity === 'medium'
+                            ? 'bg-amber-100 text-amber-700'
+                            : 'bg-green-100 text-green-700'
+                        }`}
+                      >
+                        {event.severity}
+                      </span>
+                    </h4>
 
-                  <div className="text-sm space-y-1 mb-3">
-                    <p>
-                      <span className="text-gray-500">Event ID:</span> {event.event_id}
-                    </p>
-                    <p>
-                      <span className="text-gray-500">Confidence:</span> {Math.round(event.confidence * 100)}%
-                    </p>
-                    {event.repeated_detections > 1 && (
-                      <p className="text-red-600 font-semibold text-xs">
-                        Persistent Issue: {event.repeated_detections} detections
+                    <div className="text-sm space-y-1 mb-3">
+                      <p>
+                        <span className="text-slate-500">Event ID:</span> {event.event_id}
                       </p>
-                    )}
-                  </div>
+                      <p>
+                        <span className="text-slate-500">Confidence:</span> {Math.round(event.confidence * 100)}%
+                      </p>
+                      {event.repeated_detections > 1 && (
+                        <p className="text-red-600 font-semibold text-xs">
+                          Persistent Issue: {event.repeated_detections} detections
+                        </p>
+                      )}
+                    </div>
 
-                  <button
-                    onClick={() =>
-                      navigate('/events', { state: { selectedEventId: event.event_id } })
-                    }
-                    className="w-full bg-slate-900 text-white text-xs py-1.5 rounded hover:bg-slate-800 transition font-medium cursor-pointer"
-                  >
-                    View Details
-                  </button>
-                </div>
-              </Popup>
-            </Marker>
-          ))}
+                    <button
+                      onClick={() =>
+                        navigate('/events', { state: { selectedEventId: event.event_id } })
+                      }
+                      className="w-full bg-slate-900 text-white text-xs py-1.5 rounded hover:bg-slate-800 transition font-medium cursor-pointer"
+                    >
+                      View Details
+                    </button>
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
         </MapContainer>
 
         {/* Floating Legend */}
@@ -281,4 +310,3 @@ export default function GISMapPage() {
     </div>
   );
 }
-

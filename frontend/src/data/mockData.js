@@ -1,10 +1,10 @@
 export const buses = [
-  { id: "BUS_021", route: "Route 534", status: "Active", cameraStatus: "Active", lat: 28.5639, lng: 77.2090, traffic: "High", lastUpdate: new Date(Date.now() - 120000).toISOString() },
-  { id: "BUS_014", route: "Route 419", status: "Active", cameraStatus: "Active", lat: 28.6239, lng: 77.2290, traffic: "Medium", lastUpdate: new Date(Date.now() - 300000).toISOString() },
-  { id: "BUS_032", route: "Route 720", status: "Active", cameraStatus: "Active", lat: 28.6139, lng: 77.2090, traffic: "Low", lastUpdate: new Date(Date.now() - 60000).toISOString() },
-  { id: "BUS_045", route: "Route 534", status: "Active", cameraStatus: "Active", lat: 28.5739, lng: 77.2190, traffic: "High", lastUpdate: new Date(Date.now() - 500000).toISOString() },
-  { id: "BUS_017", route: "Route 312", status: "Maintenance", cameraStatus: "Offline", lat: 28.6539, lng: 77.2390, traffic: "Unknown", lastUpdate: new Date(Date.now() - 86400000).toISOString() },
-  { id: "BUS_008", route: "Route 419", status: "Active", cameraStatus: "Active", lat: 28.6339, lng: 77.2490, traffic: "High", lastUpdate: new Date(Date.now() - 90000).toISOString() }
+  { id: "BUS_021", route: "Route 534", status: "Active", camera_status: "Active", cameraStatus: "Active", last_lat: 28.5639, last_lng: 77.2090, lat: 28.5639, lng: 77.2090, traffic: "High", last_traffic: "High", last_seen: new Date(Date.now() - 120000).toISOString(), lastUpdate: new Date(Date.now() - 120000).toISOString() },
+  { id: "BUS_014", route: "Route 419", status: "Active", camera_status: "Active", cameraStatus: "Active", last_lat: 28.6239, last_lng: 77.2290, lat: 28.6239, lng: 77.2290, traffic: "Medium", last_traffic: "Medium", last_seen: new Date(Date.now() - 300000).toISOString(), lastUpdate: new Date(Date.now() - 300000).toISOString() },
+  { id: "BUS_032", route: "Route 720", status: "Active", camera_status: "Active", cameraStatus: "Active", last_lat: 28.6139, last_lng: 77.2090, lat: 28.6139, lng: 77.2090, traffic: "Low", last_traffic: "Low", last_seen: new Date(Date.now() - 60000).toISOString(), lastUpdate: new Date(Date.now() - 60000).toISOString() },
+  { id: "BUS_045", route: "Route 534", status: "Active", camera_status: "Active", cameraStatus: "Active", last_lat: 28.5739, last_lng: 77.2190, lat: 28.5739, lng: 77.2190, traffic: "High", last_traffic: "High", last_seen: new Date(Date.now() - 500000).toISOString(), lastUpdate: new Date(Date.now() - 500000).toISOString() },
+  { id: "BUS_017", route: "Route 312", status: "Maintenance", camera_status: "Offline", cameraStatus: "Offline", last_lat: 28.6539, last_lng: 77.2390, lat: 28.6539, lng: 77.2390, traffic: "Unknown", last_traffic: "Unknown", last_seen: new Date(Date.now() - 86400000).toISOString(), lastUpdate: new Date(Date.now() - 86400000).toISOString() },
+  { id: "BUS_008", route: "Route 419", status: "Active", camera_status: "Active", cameraStatus: "Active", last_lat: 28.6339, last_lng: 77.2490, lat: 28.6339, lng: 77.2490, traffic: "High", last_traffic: "High", last_seen: new Date(Date.now() - 90000).toISOString(), lastUpdate: new Date(Date.now() - 90000).toISOString() }
 ];
 
 export const events = [
@@ -113,6 +113,15 @@ export const trafficData = {
   ]
 };
 
+export const trafficSummary = {
+  totalVehicles: 8950,
+  avgTrafficDensity: 65,
+  congestionHotspots: 8,
+  criticalHotspots: 3,
+  monitoringFleet: 24,
+  activeCameras: 22
+};
+
 export const roadConditionData = {
   severityDistribution: [
     { name: 'High Severity', value: 12 },
@@ -130,6 +139,55 @@ export const roadConditionData = {
   ]
 };
 
+export const roadSummary = {
+  totalPotholes: 42,
+  highSeverityIssues: 12,
+  persistentDefects: 8,
+  resolvedDefects: 28
+};
+
+export const hotspots = [
+  {
+    id: "1",
+    center_lat: 28.5639,
+    center_lng: 77.2090,
+    event_type: "pothole",
+    detection_count: 6,
+    severity: "high",
+    priority_score: 8.5,
+    first_seen: new Date(Date.now() - 86400000).toISOString(),
+    last_seen: new Date(Date.now() - 120000).toISOString(),
+    status: "active",
+    event_ids: ["EVT_001"]
+  },
+  {
+    id: "2",
+    center_lat: 28.6239,
+    center_lng: 77.2290,
+    event_type: "congestion",
+    detection_count: 4,
+    severity: "high",
+    priority_score: 7.8,
+    first_seen: new Date(Date.now() - 43200000).toISOString(),
+    last_seen: new Date(Date.now() - 300000).toISOString(),
+    status: "active",
+    event_ids: ["EVT_002"]
+  },
+  {
+    id: "3",
+    center_lat: 28.6139,
+    center_lng: 77.2090,
+    event_type: "road_defect",
+    detection_count: 3,
+    severity: "medium",
+    priority_score: 5.4,
+    first_seen: new Date(Date.now() - 172800000).toISOString(),
+    last_seen: new Date(Date.now() - 540000).toISOString(),
+    status: "active",
+    event_ids: ["EVT_003"]
+  }
+];
+
 export const systemAlerts = [
   {
     id: "ALT_001",
@@ -137,7 +195,8 @@ export const systemAlerts = [
     message: "High congestion detected",
     source: "BUS_021",
     details: "Ring Road intersection",
-    timestamp: new Date(Date.now() - 120000).toISOString()
+    timestamp: new Date(Date.now() - 120000).toISOString(),
+    acknowledged: false
   },
   {
     id: "ALT_002",
@@ -145,7 +204,8 @@ export const systemAlerts = [
     message: "Persistent pothole detected",
     source: "6 buses observed",
     details: "Multiple verifications",
-    timestamp: new Date(Date.now() - 480000).toISOString()
+    timestamp: new Date(Date.now() - 480000).toISOString(),
+    acknowledged: false
   },
   {
     id: "ALT_003",
@@ -153,6 +213,7 @@ export const systemAlerts = [
     message: "New road defect detected",
     source: "BUS_017",
     details: "Sector 14 Main Road",
-    timestamp: new Date(Date.now() - 720000).toISOString()
+    timestamp: new Date(Date.now() - 720000).toISOString(),
+    acknowledged: false
   }
 ];
