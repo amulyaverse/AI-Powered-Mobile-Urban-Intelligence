@@ -15,7 +15,7 @@ def main():
     model = YOLO("yolov8n.pt")
 
     # Path to the already downloaded dataset
-    data_yaml_path = r"E:\Application Dev\VS Code files\Git\pothole-indian-road-5\data.yaml"
+    data_yaml_path = "../../../datasets/pothole-indian-road-5/data.yaml"
 
     print(f"Starting training using dataset: {data_yaml_path}")
     

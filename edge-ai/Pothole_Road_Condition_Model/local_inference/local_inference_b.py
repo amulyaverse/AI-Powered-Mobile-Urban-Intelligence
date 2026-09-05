@@ -36,8 +36,8 @@ def main():
     # ---------------------------------------------------------
     # PC-TAILORED SETTINGS (Hardcoded for easy "Run" in VS Code)
     # ---------------------------------------------------------
-    video_source = r"E:\Application Dev\VS Code files\Git\Pothole_Road_Condition_Model\ruralRoad_potHoles.mp4"
-    model_path = r"E:\Application Dev\VS Code files\Git\Pothole_Road_Condition_Model\edge_inference\best_huggingface.pt"
+    video_source = "../ruralRoad_potHoles.mp4"
+    model_path = "../edge_inference/best_trained.pt"
     confidence_threshold = 0.60
     output_log_file = "detected_events_approach_b.jsonl"
     

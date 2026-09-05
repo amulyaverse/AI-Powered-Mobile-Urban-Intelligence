@@ -29,8 +29,8 @@ def main():
     # ---------------------------------------------------------
     # PC-TAILORED SETTINGS (Hardcoded for easy "Run" in VS Code)
     # ---------------------------------------------------------
-    video_source = r"E:\Application Dev\VS Code files\Git\Pothole_Road_Condition_Model\cityRoad_potHoles.mp4"
-    model_path = r"E:\Application Dev\VS Code files\Git\Pothole_Road_Condition_Model\edge_inference\best_trained.pt"
+    video_source = "../cityRoad_potHoles.mp4"
+    model_path = "../edge_inference/best_trained.pt"
     confidence_threshold = 0.25
     output_log_file = "detected_events_approach_a-city_side.jsonl"
     
