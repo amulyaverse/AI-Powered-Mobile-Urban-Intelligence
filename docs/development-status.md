@@ -7,9 +7,9 @@
 | **Traffic AI** | Pranav | ✅ Complete | #1, #2, #3 | Video dataset benchmarking (PR #29 merged) |
 | **Backend & Database** | Arjun | ✅ Complete | #7, #8, #9, #10, #11, #21, #22 | Cloud deployment & persistent storage (PR #30, #32 merged) |
 | **Edge & Integration** | Parminder | ✅ Complete | #16, #17, #18, #19, #20 | Multi-model pipeline integration (PR #31 merged) |
-| **Frontend / GIS** | Advika | 🟡 In Progress | #12 | Connect GIS Map & Analytics to live Backend API (#13, #14, #15) |
+| **Frontend / GIS** | Advika | ✅ Complete | #12, #13, #14, #15 | Cloud production backend sync (PR #33, #34) |
 | **Road AI (Potholes)** | Abhinandan | 🟡 In Progress | — | Pothole detection model prototype (#4, #5, #6) |
-| **System Integration** | Team Lead | 🟡 In Progress | #20, #21, #22 | End-to-end full system testing & submission materials (#23–#28) |
+| **System Integration** | Team Lead | 🟡 In Progress | #16, #17, #18, #19, #20, #21, #22 | End-to-end full system testing & submission materials (#23–#28) |
 
 ---
 
@@ -44,12 +44,14 @@
 - **Source:** [`integration/`](../integration/) · Documentation: [`docs/architecture/integration-layer.md`](architecture/integration-layer.md)
 - **Features:** GPS trajectory simulation (`sample_route.csv`), standardized `EventGenerator` (enforcing confidence thresholds and UTC timestamps), HTTP client with retry logic, and end-to-end runner (`run_traffic_pipeline.py`).
 
-### 4. Frontend & GIS Dashboard — 🟡 In Progress
-- **Resolved Issues:** #12 (Deployed Prototype)
-- **Active Issues:** #13, #14, #15
+### 4. Frontend & GIS Dashboard — ✅ Complete
+- **PR:** #33, #34 (`fix/frontend-loading-and-demo-fallback`, `feat: connect frontend to backend api`)
+- **Resolved Issues:** #12, #13, #14, #15
 - **Live Prototype:** [ai-powered-mobile-urban-intelligenc.vercel.app](https://ai-powered-mobile-urban-intelligenc.vercel.app/)
-- **Next Step:** Update `frontend/src/services/api.js` to fetch live data from `http://localhost:8000/api/events` and `/api/hotspots`.
+- **Source:** [`frontend/src/`](../frontend/src/)
+- **Features:** Connected GIS Map (`/map`) and MiniMap to `/api/events` and `/api/hotspots`, interactive Event Management table and modal with status updates (`/events`), live Recharts telemetry charts on Traffic Analytics (`/traffic`) and Road Conditions (`/road-conditions`), live bus fleet tracking (`/live`), dual-mode indicator badge (`LIVE DATA` / `DEMO MODE` / `DEMO DATA (OFFLINE)`), and robust error boundaries preventing infinite loading states.
 
 ### 5. Road AI (Pothole & Defect Detection) — 🟡 In Progress
 - **Active Issues:** #4, #5, #6
 - **Next Step:** Benchmark pothole datasets (RDD2022 / Pothole-600) and train YOLOv8 model in `edge-ai/pothole-detection/`.
+

@@ -5,323 +5,328 @@
 
 ---
 
-## Overview
+## 1. Project Overview
 
-Public transport buses already travel throughout every part of a city, every single day. They carry cameras — but that video is almost entirely unused for urban sensing.
+Public transit buses navigate every sector of a modern city on daily scheduled routes. While many transit vehicles carry onboard cameras, their visual streams remain almost entirely unutilized for proactive municipal sensing.
 
-This platform transforms the existing public bus fleet into a **network of mobile AI-powered sensing units**. Bus-mounted cameras are processed using edge AI to detect road defects, traffic conditions, and other urban events. Each detection becomes a structured, geo-tagged event that is sent to a central dashboard where transport and municipal authorities can view and act on it.
-
----
-
-## Problem
-
-City authorities currently depend on:
-- **Fixed CCTV cameras** — expensive to install and maintain, sparse, limited geographical coverage
-- **Manual road surveys** — infrequent, labor-intensive, slow, costly
-- **Citizen complaints** — reactive, incomplete, lacking standardized geographic data
-
-There is no existing system for **continuous, city-wide, automated road and traffic sensing** at scale.
-
----
-
-## Solution
-
-Leverage the public transport buses already traversing city roads.
+This platform transforms the public bus fleet into an **autonomous, distributed network of mobile AI sensing units**. Edge AI models process front-facing camera streams directly on the vehicle to detect road hazards (potholes, surface defects) and traffic conditions (congestion, vehicle counts). Detections are converted into structured, lightweight, geo-tagged JSON telemetry events and transmitted to a centralized command center for municipal action and urban planning.
 
 ```
-Bus Camera
-    ↓
-Edge AI  (runs directly on the onboard device)
-    ↓
-Vehicle Detection / Pothole Detection
-    ↓
-Event Generation
-    ↓
-GPS + Timestamp + Confidence
-    ↓
-Backend API  (cellular uplink)
-    ↓
-Database
-    ↓
-GIS Dashboard + Analytics
-    ↓
-Authority Action
+┌─────────────────┐       ┌─────────────────┐       ┌────────────────────────┐
+│ Bus Camera Feed │ ────> │   Edge AI Unit  │ ────> │ Structured Event JSON  │
+└─────────────────┘       │ (YOLOv8 + SORT) │       │ (GPS + Time + Density) │
+                          └─────────────────┘       └────────────────────────┘
+                                                                 │ (4G/5G Uplink)
+                                                                 ▼
+┌─────────────────────────┐       ┌─────────────────┐       ┌────────────────────────┐
+│  Municipal GIS Actions  │ <──── │   GIS Dashboard │ <──── │   FastAPI Backend & DB │
+│ (Repair Work Orders)    │       │  & Analytics UI │       │ (50m Spatial Cluster)  │
+└─────────────────────────┘       └─────────────────┘       └────────────────────────┘
 ```
 
-By running AI inference **on the edge device**, only lightweight structured JSON events (not bandwidth-heavy raw video) are transmitted over cellular networks (4G/5G).
+---
+
+## 2. Problem Statement
+
+Modern municipal and traffic management authorities face fundamental sensing bottlenecks:
+
+- **Fixed CCTV Cameras:** High capital and maintenance expenditure, stationary field-of-view, sparse suburban coverage.
+- **Manual Road Surveys:** Slow, labor-intensive, conducted at intervals of months or years.
+- **Citizen Grievances:** Reactive, biased reporting, missing standardized spatial coordinates or severity classification.
+
+**Our Approach:** Utilize the transit fleet already driving city streets to achieve automated, continuous, city-wide mobile surveillance at zero incremental vehicular deployment cost.
 
 ---
 
-## Current MVP
+## 3. Core MVP Features & Status
 
-The core features developed for the SIH'26 prototype:
-
-| # | Feature | Module Area | Status |
-|---|---------|-------------|--------|
-| 1 | Vehicle detection, classification, and counting | Traffic AI | ✅ Complete (PR #29) |
-| 2 | Traffic density and congestion estimation | Traffic AI | ✅ Complete (PR #29) |
-| 3 | Pothole and road-defect detection | Road AI | 🟡 In Progress |
-| 4 | GPS + timestamp + confidence event generation | Edge / Integration | ✅ Complete (PR #31) |
-| 5 | Centralized backend REST API + database | Backend | ✅ Complete (PR #30, #32) |
-| 6 | Persistent / repeated defect detection (50m clustering) | Backend / Intelligence | ✅ Complete (PR #32) |
-| 7 | Maintenance priority scoring formula | Backend / Intelligence | ✅ Complete (PR #32) |
-| 8 | GIS dashboard with real-time event markers | Frontend | ✅ Complete (Prototype Live) |
-| 9 | Traffic and road condition analytics & heatmaps | Frontend | ✅ Complete (Prototype Live) |
-
----
-
-## Key Intelligence Layer
-
-Beyond simple frame-by-frame detection, the platform incorporates a **consensus-based intelligence layer**:
-
-- **Repeated / Persistent Detection:** Multiple buses independently detect the same pothole or road defect on different passes.
-- **Spatial Clustering:** The backend correlates GPS coordinates across detections (within a 50-meter radius using Haversine distance in `backend/app/services/hotspot_service.py`).
-- **Hotspot Generation:** Recurring detections trigger confirmed hotspot status, eliminating false positives from single runs.
-- **Maintenance Priority Scoring:** Priority score is dynamically computed:  
-  $$\text{Priority Score} = f(\text{Severity}, \text{Repeat Count}, \text{Traffic Density})$$
-
-### Why Edge-First Processing?
-- **Bandwidth Reduction:** Only compact JSON payloads (~KB) are sent instead of gigabytes of raw video.
-- **Lower Latency:** Detections are converted to events in real time as the bus travels.
-- **Fleet Scalability:** Central server load remains low even as hundreds of buses stream data.
-- **Privacy by Design:** Raw passenger or street video never leaves the bus device.
+| # | Feature Area | Description | Status |
+|---|---|---|---|
+| 1 | **Vehicle Detection & Counting** | YOLOv8 multi-class detection (`car`, `bike`, `bus`, `truck`) with SORT Kalman tracking and directional tripwire counting | ✅ Complete (PR #29) |
+| 2 | **Traffic Density Estimation** | Dynamic density scoring formulation (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`) with real-time video HUD overlays | ✅ Complete (PR #29) |
+| 3 | **Pothole & Road Defect AI** | Road hazard detection and severity classification from surface video | 🟡 In Progress (#4, #5, #6) |
+| 4 | **Edge Event Generator** | Normalization of AI detections into standardized JSON events with simulated GPS and ISO UTC timestamps | ✅ Complete (PR #31) |
+| 5 | **Backend REST API Engine** | High-performance FastAPI server with Pydantic v2 schemas and query-filterable endpoints | ✅ Complete (PR #30, #32) |
+| 6 | **Spatial Hotspot Clustering** | 50-meter Haversine spatial clustering algorithm (`hotspot_service.py`) detecting persistent multi-bus hazards | ✅ Complete (PR #32) |
+| 7 | **Maintenance Priority Engine** | Formulaic scoring: $\text{Priority Score} = f(\text{Severity}, \text{Repeat Count}, \text{Traffic Density})$ | ✅ Complete (PR #32) |
+| 8 | **GIS Urban Dashboard** | Interactive Leaflet map with real geo-tagged event pins, cluster circles, and search/filter tools | ✅ Complete (PR #33, #34) |
+| 9 | **Interactive Telemetry Analytics** | Recharts visualizations for 24h traffic density curves, vehicle classification, defect severity, and trends | ✅ Complete (PR #33, #34) |
+| 10 | **Dual-Mode Data Gateway** | Seamless live API mode with automatic, graceful fallback to local mock store when offline | ✅ Complete (PR #33, #34) |
+| 11 | **Public Cloud Backend Deploy** | Cloud hosting for FastAPI + managed PostgreSQL instance | 🟡 Planned (#27) |
+| 12 | **End-to-End Stress Testing** | Continuous multi-hour video dataset stress validation | 🟡 In Progress (#23) |
 
 ---
 
-## Future Scope
-
-The following features are **NOT** part of the current MVP and will not be implemented for the initial SIH prototype:
-
-- Waterlogging and flood depth detection
-- Traffic sign detection and inventory
-- Missing zebra crossings / missing dividers detection
-- Pedestrian-risk detection
-- Rash driving and erratic maneuver analysis
-- ANPR (Automatic Number Plate Recognition)
-- Hit-and-run incident reporting
-- Origin–destination (OD) matrix analysis
-- Advanced AI route prediction
-
----
-
-## Current Development Status
-
-| Module | Status | Resolved Tasks | Notes |
-|--------|--------|----------------|-------|
-| Project Setup | ✅ Complete | #24 | Repository structure, issue tracking, and documentation finalized |
-| Frontend Prototype | ✅ Complete | #12 | Deployed on Vercel with responsive GIS dashboard & mock data |
-| Traffic AI | ✅ Complete | #1, #2, #3 | YOLOv8 vehicle detection, SORT tracking, line counting & density (PR #29) |
-| Backend API & DB | ✅ Complete | #7, #8, #9, #10, #11, #21, #22 | FastAPI server, SQLite/Postgres DB, 50m spatial clustering (PR #30, #32) |
-| Edge Pipeline | ✅ Complete | #16, #17, #18, #19, #20 | Video ingestion, GPS simulation, HTTP event streamer (PR #31) |
-| Road Damage AI | 🟡 In Progress | — | Pothole and road defect detection models (#4, #5, #6) |
-| Frontend API Sync | 🟡 In Progress | — | Connecting frontend service layer to live backend API (#13, #14, #15) |
-| Full Deployment | 🟡 Planned | — | Cloud deployment of backend + DB connected to Vercel (#27) |
-
----
-
-## Live Prototype
-
-🔗 **[https://ai-powered-mobile-urban-intelligenc.vercel.app/](https://ai-powered-mobile-urban-intelligenc.vercel.app/)**
-
-> ⚠️ **Note:** This is the current **frontend prototype** running on **mock/synthetic data**.  
-> It establishes the user experience, GIS interface, and data contract for municipal authorities. Real edge AI models and backend services will be connected in subsequent development milestones.
-
----
-
-## Architecture
-
-### Prototype Architecture (for SIH Hackathon Demo)
+## 4. Current Implementation Status
 
 ```
-Recorded Road / Bus Video (MP4 / Camera Feed)
-        ↓
-Laptop / PC  (simulated edge device)
-        ↓
-AI Inference  (YOLOv8 / OpenCV)
-        ↓
-Event Generator  (Python script attaching simulated GPS + timestamp)
-        ↓
-Backend API  (FastAPI / Uvicorn @ port 8000)
-        ↓
-Database  (SQLite / PostgreSQL)
-        ↓
-GIS Dashboard  (React + Leaflet + Recharts)
+✅ Completed     🟡 In Progress     🔴 Pending     🔵 Future Scope
 ```
 
-### Intended Deployment Architecture (Production Fleet)
+- ✅ **Traffic AI Module:** YOLOv8 detection, SORT tracking, line counting, and density estimation ([`docs/models/traffic-ai.md`](docs/models/traffic-ai.md)).
+- ✅ **Backend Engine:** FastAPI REST endpoints, SQLAlchemy ORM, SQLite local auto-migrations, 50m spatial clustering service ([`backend/app/`](backend/app/)).
+- ✅ **Integration Layer:** GPS route simulator (`sample_route.csv`), `EventGenerator`, HTTP client, and pipeline runner ([`docs/architecture/integration-layer.md`](docs/architecture/integration-layer.md)).
+- ✅ **Frontend & GIS:** React/Vite dashboard, Leaflet GIS map, Recharts analytics, incident management with status updates, dual-mode Live/Demo operation ([`frontend/src/`](frontend/src/)).
+- 🟡 **Road Defect AI:** Pothole dataset selection and model training benchmark in `edge-ai/pothole-detection/` (Active tasks: #4, #5, #6).
+- 🟡 **Cloud Deployment:** Live frontend hosted on Vercel; public cloud FastAPI + PostgreSQL deployment scheduled (#27).
+- 🔴 **Submission Assets:** SIH 6-page PPT deck (#25) and demo video with voiceover (#26).
+- 🔵 **Future Scope:** Waterlogging detection, ANPR, traffic sign inventory, pedestrian hazard identification, erratic driving analysis.
 
-```
-Bus-Mounted Cameras (HD Front/Rear)
-        ↓
-Edge Compute Device  (Jetson Nano / Raspberry Pi + Accelerator)
-        ↓
-4G / 5G Cellular Network
-        ↓
-Central Cloud Backend Platform
-        ↓
-GIS Dashboard → Municipal / Transport Authority
-```
+---
 
-### Architecture Diagram
+## 5. System Architecture & Edge Intelligence
+
+### Edge-First Processing Rationale
+
+1. **Bandwidth Optimization:** Transmitting continuous 1080p video from 100 buses would require >200 Mbps of continuous cellular bandwidth. By running inference at the edge, each vehicle transmits lightweight JSON payloads (~1 KB) only upon detection.
+2. **Privacy by Design:** Raw footage containing civilian faces or vehicle license plates is processed in volatile memory on the edge device and immediately discarded.
+3. **Consensus-Based Spatial Verification:** A single pothole detection is treated as unverified until multiple independent bus passes register coordinates within a 50-meter radius, eliminating transient false positives.
 
 ```mermaid
 flowchart TD
-    A[Bus Cameras] --> B[Edge AI Device]
-    B --> C[Vehicle Detection & Counting]
-    B --> D[Pothole & Defect Detection]
-    C --> E[Event Generator]
-    D --> E
-    E --> F[GPS + Timestamp + Confidence]
-    F -->|4G/5G Network| G[Backend API]
-    G --> H[(Database)]
-    H --> I[GIS Dashboard]
-    H --> J[Analytics Engine]
-    J --> I
-    I --> K[Municipal Authority Action]
+    subgraph EdgeDevice ["Edge AI Device (Onboard Bus)"]
+        Cam[Camera Stream] --> AI[YOLOv8 Inference]
+        AI --> Count[SORT Tracking & Counting]
+        AI --> Density[Density Classifier]
+        GPS[GPS Receiver / Route CSV] --> Gen[Event Generator Wrapper]
+        Count --> Gen
+        Density --> Gen
+    end
+
+    Gen -->|HTTP POST /api/events| API[FastAPI Backend]
+
+    subgraph BackendCore ["Backend & Intelligence Layer"]
+        API --> DB[(Relational DB)]
+        API --> Cluster[50m Haversine Clustering]
+        Cluster --> Hotspots[(Hotspots & Priority Engine)]
+    end
+
+    subgraph FrontendApp ["Command Center (React / Vite)"]
+        DB --> Gateway[api.js Service Layer]
+        Gateway --> GIS[GIS Map Page]
+        Gateway --> Events[Incident Management]
+        Gateway --> Analytics[Traffic & Road Analytics]
+        Gateway --> Live[Live Fleet Telemetry]
+    end
 ```
 
 ---
 
-## Repository Structure
+## 6. Backend & Database Architecture
 
-```
-AI-Powered-Mobile-Urban-Intelligence/
-├── frontend/               # React + Vite GIS dashboard
-│   ├── src/
-│   │   ├── components/     # Reusable UI: AlertPanel, MiniMap, KPICards
-│   │   ├── pages/          # Overview, LiveMonitoring, Events, GIS Map, Analytics
-│   │   ├── data/           # mockData.js (Centralized synthetic data)
-│   │   ├── services/       # api.js (Service layer ready for backend integration)
-│   │   └── layouts/        # MainLayout (Sidebar & navigation)
-│   └── package.json
-├── backend/                # FastAPI Backend & Database Engine
-│   ├── app/
-│   │   ├── routers/        # /api/events, /api/buses, /api/analytics, /api/hotspots
-│   │   ├── models/         # SQLAlchemy models: Event, Bus, Hotspot, Alert
-│   │   ├── schemas/        # Pydantic validation schemas
-│   │   ├── services/       # hotspot_service.py (50m spatial clustering)
-│   │   ├── database.py     # DB session & auto-migration
-│   │   ├── seed.py         # Fleet and event seed data
-│   │   └── main.py         # FastAPI application entry point
-│   ├── tests/              # Backend API & integration tests
-│   └── requirements.txt
-├── edge-ai/
-│   ├── traffic-detection/  # YOLOv8 detection, SORT tracking & density estimation (Pranav)
-│   │   ├── detector.py     # Vehicle detection & NMS
-│   │   ├── tracker.py      # SORT Kalman tracker
-│   │   ├── counter.py      # Directional line-crossing counter
-│   │   ├── density_estimator.py # Density classification & live HUD
-│   │   ├── pipeline.py     # Main video pipeline orchestrator
-│   │   └── run.py          # Standalone CLI runner
-│   └── pothole-detection/  # Pothole & road defect detection (Abhinandan)
-├── integration/            # End-to-End Pipeline & Simulation (Parminder)
-│   ├── event-generator/    # Standardized EventGenerator wrapper
-│   ├── gps/                # GPS trajectory simulator (sample_route.csv)
-│   ├── run_traffic_pipeline.py # Live video stream -> GPS -> Backend runner
-│   └── test_pipeline.py    # Pipeline integration smoke test
-├── datasets/               # Training data placeholder (gitignored)
-├── docs/
-│   ├── api/
-│   │   └── event-schema.md # Single source of truth for event JSON contract
-│   ├── architecture/
-│   │   ├── system-architecture.md # Detailed architecture specification
-│   │   └── integration-layer.md   # Integration layer & pipeline guide
-│   ├── models/
-│   │   └── traffic-ai.md          # Full documentation for Traffic AI module
-│   ├── project-management.md      # Team roles, development principles & milestones
-│   ├── development-status.md      # Current module status & next deliverables
-│   └── project-board.md           # Task board and issue tracking mapping
-├── demo/                   # Demo video and visual assets placeholder
-├── presentation/           # SIH presentation slides placeholder
-├── deployment/             # Deployment configurations
-├── CONTRIBUTING.md         # Git collaboration workflow & branch rules
-└── requirements.txt        # Root Python dependencies
+### Local Development vs Production
+
+- **Local Development:** SQLite database at `backend/urban_intelligence.db` (gitignored). Auto-created and migrated on startup. Rich test data populated via `python seed_rich.py`.
+- **Production Support:** SQLAlchemy connection string configured via `DATABASE_URL` in `backend/.env`. Compatible with PostgreSQL (Supabase / Railway / AWS RDS) without application code changes.
+
+### Key API Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/health` | Service health status check |
+| `POST` | `/api/events` | Ingest edge AI detection event (enforces `confidence >= 0.65`) |
+| `GET` | `/api/events` | List events with filters (`event_type`, `severity`, `status`, `bus_id`, `search`, `limit`, `offset`) |
+| `GET` | `/api/events/{id}` | Retrieve single event metadata and captured evidence |
+| `PATCH` | `/api/events/{id}/status` | Update incident status (`new` → `under_review` → `verified` → `resolved`) |
+| `GET` | `/api/buses` | Fleet listing with last reported GPS position and traffic condition |
+| `GET` | `/api/hotspots` | Persistent detection clusters ordered by calculated priority score |
+| `GET` | `/api/alerts` | System alerts for the Command Center alert panel |
+| `PATCH` | `/api/alerts/{id}/acknowledge` | Mark system alert as acknowledged |
+| `GET` | `/api/analytics/summary` | KPI metrics for overview dashboard |
+| `GET` | `/api/analytics/traffic` | Traffic density curve (24h) and vehicle classification breakdown |
+| `GET` | `/api/analytics/traffic/summary` | Top-level traffic KPI summaries |
+| `GET` | `/api/analytics/road` | Defect severity distribution and 7-day reporting trend |
+| `GET` | `/api/analytics/road/summary` | Top-level road condition summaries |
+
+---
+
+## 7. Frontend & GIS Dashboard
+
+The frontend is a single-page application built with React, Vite, Tailwind CSS, Leaflet, and Recharts.
+
+### Key Capabilities
+
+1. **Platform Overview (`/`):** Real-time KPI summary cards, mini-map preview, and acknowledgeable alert panel.
+2. **Live Fleet Monitoring (`/live`):** Real-time transit bus roster, simulated front-camera HUD stream, and telemetry status.
+3. **Incident Management (`/events`):** Filterable incident table with search, detailed inspection modal, and interactive workflow status changer.
+4. **GIS Urban Intelligence Map (`/map`):** Full-screen Leaflet map displaying geo-tagged event pins, persistent hotspot clusters, and heatmap overlay.
+5. **Traffic Intelligence Analytics (`/traffic`):** 24-hour density area chart, vehicle category pie chart, and live bus route congestion delay cards.
+6. **Road Condition Analytics (`/road-conditions`):** Severity distribution bar chart and 7-day defect trend visualization.
+7. **Dual-Mode Gateway (`frontend/src/services/api.js`):**
+   - **Live API Mode:** Fetches from `VITE_API_BASE_URL` with a 3.5s timeout.
+   - **Automatic Demo Fallback:** If the backend is unreachable or `VITE_USE_MOCK_DATA=true`, gracefully falls back to local synthetic data without infinite loading states.
+   - **Interactive Switcher:** Toggle data mode on the fly via the Settings gear icon in the navigation header.
+
+---
+
+## 8. Local Setup & Installation
+
+### Prerequisites
+
+- **Python:** 3.10 – 3.14
+- **Node.js:** 18+ and npm
+- **Git**
+
+---
+
+### Step 1: Clone Repository
+
+```bash
+git clone https://github.com/amulyaverse/AI-Powered-Mobile-Urban-Intelligence.git
+cd AI-Powered-Mobile-Urban-Intelligence
 ```
 
 ---
 
-## Setup & Installation
+### Step 2: Backend Setup & Seeding
 
-### 1. Frontend Dashboard Setup
+```bash
+cd backend
+
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate   # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Configure environment
+cp .env.example .env
+
+# Seed database with realistic transit fleet and Delhi NCR event clusters
+python seed_rich.py
+
+# Start FastAPI server
+uvicorn app.main:app --reload --port 8000
+```
+
+- API Docs (Swagger UI): **[http://localhost:8000/docs](http://localhost:8000/docs)**
+- Health Check: **[http://localhost:8000/health](http://localhost:8000/health)**
+
+---
+
+### Step 3: Frontend Dashboard Setup
+
+In a new terminal window:
 
 ```bash
 cd frontend
+
+# Install Node dependencies
 npm install
+
+# Configure environment
+cp .env.example .env
+
+# Start Vite development server
 npm run dev
 ```
+
 Open **[http://localhost:5173](http://localhost:5173)** in your browser.
 
 ---
 
-### 2. Backend Server Setup
+### Step 4: Run Traffic AI & End-to-End Streamer (Optional)
+
+In a third terminal window:
 
 ```bash
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-```
-- Interactive Swagger API docs: **[http://localhost:8000/docs](http://localhost:8000/docs)**
-- Health check endpoint: **[http://localhost:8000/health](http://localhost:8000/health)**
-- Events endpoint: **[http://localhost:8000/api/events](http://localhost:8000/api/events)**
-
----
-
-### 3. Traffic AI & End-to-End Pipeline
-
-#### Run Standalone Traffic AI (Webcam / Video)
-```bash
+# Standalone Traffic AI HUD runner:
 cd edge-ai/traffic-detection
 pip install -r requirements.txt
 python run.py --source 0 --show
+
+# Or run the live End-to-End Streamer (AI + GPS -> Backend API):
+# (from project root)
+python integration/run_traffic_pipeline.py \
+  --source 0 \
+  --backend-url http://localhost:8000/api/events \
+  --bus-id BUS_021
 ```
 
-#### Run End-to-End Streamer (AI + GPS -> Backend)
+---
+
+## 9. Environment Variables Reference
+
+### Backend (`backend/.env`)
+
+| Variable | Default Value | Description |
+|---|---|---|
+| `DATABASE_URL` | `sqlite:///./urban_intelligence.db` | SQLAlchemy database connection string |
+| `DEBUG` | `true` | Enable debug logs |
+| `ALLOWED_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,https://ai-powered-mobile-urban-intelligenc.vercel.app` | Comma-separated CORS allowed origins |
+| `MIN_CONFIDENCE` | `0.65` | Minimum AI confidence required for ingestion |
+| `HOTSPOT_RADIUS_METRES` | `50.0` | Spatial clustering distance threshold |
+| `HOTSPOT_ALERT_THRESHOLD` | `3` | Detections needed to trigger a system alert |
+
+### Frontend (`frontend/.env`)
+
+| Variable | Default Value | Description |
+|---|---|---|
+| `VITE_API_BASE_URL` | `http://localhost:8000` | Target FastAPI backend URL |
+| `VITE_USE_MOCK_DATA` | `false` | Force demo mode without network calls |
+
+---
+
+## 10. Testing & Verification
+
+### Backend Automated Test Suite
+
+Run unit and integration tests covering events, validation, hotspot clustering, and analytics endpoints:
+
 ```bash
-# In project root with backend running:
-python integration/run_traffic_pipeline.py --source 0 --backend-url http://localhost:8000/api/events --bus-id BUS-001
+cd backend
+pytest tests
 ```
 
----
+- **Result:** 29 passed in ~1.0s.
 
-## Team & Suggested Ownership
+### Frontend Production Build Test
 
-> **Note:** These are initial suggested ownership areas. Team members actively collaborate, cross-review code, and support integration across modules.
+Verify that all React components, Tailwind styling, and TypeScript/ESLint rules compile cleanly:
 
-| Member | Primary Ownership | Core Deliverables | Status |
-|--------|-------------------|-------------------|--------|
-| **Pranav** | Traffic AI / Computer Vision | Vehicle detection, counting & density estimation | ✅ Completed (PR #29) |
-| **Arjun** | Backend / Database | REST API, database schema, persistent defect clustering | ✅ Completed (PR #30, #32) |
-| **Parminder** | Edge AI / Integration | Video ingestion pipeline, GPS simulation & event generator | ✅ Completed (PR #31) |
-| **Advika** | Frontend / GIS | Dashboard API integration, GIS visualization & heatmaps | 🟡 In Progress (Prototype Live) |
-| **Abhinandan** | ML / Road-Damage AI | Pothole detection, road defect classification & severity scoring | 🟡 In Progress |
-| **Team Lead** | System Integration & Coordination | Architecture, end-to-end integration, documentation, PPT & submission | 🟡 In Progress |
+```bash
+cd frontend
+npm run build
+```
+
+- **Result:** Vite build passed with zero compilation errors (`dist/` generated).
 
 ---
 
-## Submission Requirements
+## 11. Team & Project Responsibilities
 
-| Item | Target / Format | Status |
-|------|-----------------|--------|
-| GitHub Repository | Source code, docs & setup instructions | ✅ Live & Updated |
-| Live Prototype | Web deployment of GIS dashboard | ✅ [Live on Vercel](https://ai-powered-mobile-urban-intelligenc.vercel.app/) |
-| Traffic AI Pipeline | Live vehicle detection & density stream | ✅ [Implemented](docs/models/traffic-ai.md) |
-| Backend Engine & DB | FastAPI + SQLite/Postgres + Clustering | ✅ [Implemented](backend/) |
-| End-to-End Pipeline | Video → Edge AI → GPS → Backend | ✅ [Implemented](docs/architecture/integration-layer.md) |
-| 6-Page PPT | Official SIH presentation slide deck | 🟡 Planned (`presentation/`) |
-| Demo Video | 3–5 min video walkthrough with voiceover | 🟡 Planned (`demo/`) |
-| Final Audit | Repository audit & rehearsal | 🟡 Planned |
+| Member | Focus Area | Core Responsibilities | Implementation Status |
+|---|---|---|---|
+| **Pranav** | Traffic AI / Vision | Vehicle detection, counting, SORT tracker, density estimator | ✅ Complete (PR #29) |
+| **Arjun** | Backend & Database | FastAPI REST engine, DB schema, 50m spatial clustering, analytics | ✅ Complete (PR #30, #32) |
+| **Parminder** | Edge AI & Integration | GPS route simulator, standardized EventGenerator, pipeline runner | ✅ Complete (PR #31) |
+| **Advika** | Frontend & GIS | Command center, GIS map, Recharts telemetry, dual-mode service | ✅ Complete (PR #33, #34) |
+| **Abhinandan** | ML / Road-Damage AI | Pothole detection, road defect classification & severity scoring | 🟡 In Progress (#4, #5, #6) |
+| **Team Lead** | System Architecture | Architecture, integration testing, project coordination, submission | 🟡 In Progress (#23–#28) |
 
 ---
 
-## Documentation Index
+## 12. Known Limitations
 
-Detailed specifications and collaboration guidelines are organized under `docs/`:
+1. **Road Defect AI Model:** Pothole model training on RDD2022 dataset is currently underway; road defect events in the local database are currently supplied via the rich seed and GPS simulation runner.
+2. **Cloud Backend Hosting:** While the frontend is live on Vercel, the backend is currently run locally for development; public deployment on cloud infrastructure is scheduled under task #27.
+3. **Simulated GPS in Lab Tests:** In the absence of physical hardware onboard active Delhi DTC buses during lab testing, GPS trajectories are supplied via synchronized CSV playback (`sample_route.csv`).
 
-- **[Event Schema & API Contract](docs/api/event-schema.md)** — The standardized event JSON schema shared across all modules.
-- **[System Architecture](docs/architecture/system-architecture.md)** — In-depth architectural design, data flows, and edge computing rationale.
-- **[Integration Layer Guide](docs/architecture/integration-layer.md)** — End-to-end pipeline runner and GPS simulation guide.
-- **[Traffic AI Module Documentation](docs/models/traffic-ai.md)** — Full specification and parameters for the Vehicle AI pipeline.
-- **[Project Management](docs/project-management.md)** — Team principles, role descriptions, and daily milestone roadmap.
-- **[Development Status](docs/development-status.md)** — Granular tracking of module completion and active deliverables.
-- **[Project Task Board](docs/project-board.md)** — Task inventory mapped to GitHub issues, status, and resolution details.
-- **[Contributing Guidelines](CONTRIBUTING.md)** — Git workflow, branch naming rules, and pull request conventions.
+---
+
+## 13. Documentation Index
+
+- **[Event Schema Contract](docs/api/event-schema.md)** — Standardized JSON schema for mobile telemetry events.
+- **[System Architecture](docs/architecture/system-architecture.md)** — Comprehensive architecture specification and edge rationale.
+- **[Integration Layer Guide](docs/architecture/integration-layer.md)** — End-to-end pipeline runner and GPS simulation details.
+- **[Traffic AI Module Documentation](docs/models/traffic-ai.md)** — Full parameters, tracker mechanics, and HUD specs.
+- **[Development Status](docs/development-status.md)** — Module completion tracking and next deliverables.
+- **[Project Board & Task Tracker](docs/project-board.md)** — All 28 project tasks mapped to GitHub issues and PRs.
+- **[Contributing Guidelines](CONTRIBUTING.md)** — Git branch rules and pull request standards.
+
+---
+
+## 14. License
+
+Distributed under the MIT License. See [`LICENSE`](LICENSE) for details.
