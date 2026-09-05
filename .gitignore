@@ -80,8 +80,9 @@ Thumbs.db
 *.tmp
 *.temp
 *.log
-test.db
 *.db
-!backend/urban_intelligence.db
+*.sqlite
+*.sqlite3
+test.db
 
 
