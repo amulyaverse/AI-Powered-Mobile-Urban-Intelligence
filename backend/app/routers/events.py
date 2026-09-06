@@ -104,8 +104,9 @@ def ingest_event(payload: EventCreate, db: Session = Depends(get_db)):
     db.add(event)
     db.flush()  # Assign event_id before hotspot logic
 
-    # Run hotspot intelligence (commits internally)
+    # Run hotspot intelligence
     process_event_for_hotspot(db, event)
+    db.commit()
 
     db.refresh(event)
     return event

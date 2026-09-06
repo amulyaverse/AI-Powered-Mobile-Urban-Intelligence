@@ -10,9 +10,9 @@
 
 | Subsystem / Module | Status | Technology Stack | Implementation Location | Verified Test State |
 |---|---|---|---|---|
-| **Traffic AI & Vision** | ✅ COMPLETED | YOLOv8, SORT Kalman Tracker, OpenCV | [`edge-ai/traffic-detection/`](edge-ai/traffic-detection/) | Live HUD, line-crossing counting, density estimation |
-| **Road AI (Potholes)** | ✅ COMPLETED | YOLOv8 Defect Detection, Multi-Inference Engine | [`edge-ai/pothole-detection/`](edge-ai/pothole-detection/) · [`docs/models/road-ai.md`](docs/models/road-ai.md) | 14/14 Pytest tests passing; Video pipeline, severity scoring, JSONL streams |
-| **Backend REST API** | ✅ COMPLETED | FastAPI, SQLAlchemy, Pydantic | [`backend/app/`](backend/app/) | 29/29 Pytest unit & integration tests passing |
+| **Traffic AI & Vision** | ✅ COMPLETED | YOLOv8, SORT Kalman Tracker, OpenCV | [`edge-ai/traffic-detection/`](edge-ai/traffic-detection/) | 38/38 Pytest tests passing; Live HUD, line-crossing counting, density estimation |
+| **Road AI (Potholes)** | ✅ COMPLETED | YOLOv8 Defect Detection, Multi-Inference Engine | [`edge-ai/pothole-detection/`](edge-ai/pothole-detection/) · [`docs/models/road-ai.md`](docs/models/road-ai.md) | 14/14 Pytest tests passing (+ 94 suite tests); Video pipeline, severity scoring, JSONL streams |
+| **Backend REST API** | ✅ COMPLETED | FastAPI, SQLAlchemy, Pydantic | [`backend/app/`](backend/app/) | 39/39 Pytest unit & integration tests passing (including Bus CRUD) |
 | **Spatial Clustering & Intelligence** | ✅ COMPLETED | Haversine 50m Clustering, Priority Formula | [`backend/app/services/hotspot_service.py`](backend/app/services/hotspot_service.py) | Dynamic multi-pass hotspot correlation |
 | **Edge Integration & Streamer** | ✅ COMPLETED | Python, GPS Simulator, HTTP Event Client | [`integration/`](integration/) | End-to-end video → AI → GPS → Backend pipeline |
 | **GIS Command Center Frontend** | ✅ COMPLETED | React 18, Vite, Tailwind CSS, Leaflet, Recharts | [`frontend/`](frontend/) | Zero build errors; Dual-mode live & demo fallback |
@@ -243,11 +243,18 @@ AI-Powered-Mobile-Urban-Intelligence/
 │   │   ├── density_estimator.py   # Traffic density scoring & live HUD overlay
 │   │   ├── pipeline.py            # Video stream processing pipeline
 │   │   └── run.py                 # Standalone execution CLI
-│   └── Pothole_Road_Condition_Model/ # Pothole detection & severity scoring
+│   ├── pothole-detection/         # Modular Pothole & Road Damage AI package (14 tests)
+│   │   ├── pothole_detector.py    # YOLOv8 road defect detector & bounding box extraction
+│   │   ├── pothole_severity.py    # Area & width ratio deterministic severity engine
+│   │   ├── pothole_event_schema.py# Dataclass serialization to JSON telemetry
+│   │   ├── pothole_pipeline.py    # Video & image frame streaming pipeline
+│   │   └── run.py                 # CLI runner for road damage inference
+│   └── Pothole_Road_Condition_Model/ # Pothole detection engines & training resources
 │       ├── cloud_training/        # Kaggle/Colab training scripts & notebooks
 │       ├── local_training/        # Local PyTorch training pipeline
 │       ├── edge_inference/        # Edge-optimized inference engines (Approach A & B)
 │       ├── local_inference/       # Local evaluation scripts
+│       ├── legacy_experiments/    # Preserved original prototypes & experiment scripts
 │       └── pipeline.py            # Pothole detection pipeline & severity calculation
 ├── integration/                   # Pipeline Integration & Edge Streamer
 │   ├── event-generator/           # Standardized event schema formatter

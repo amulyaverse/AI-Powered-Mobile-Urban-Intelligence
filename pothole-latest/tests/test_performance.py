@@ -24,7 +24,7 @@ class TestPerformance:
         hm = healing_manager_factory(dedup=0.01)
         start = time.time()
         for i in range(10000):
-            hm.get_or_add_pothole(28.0 + i * 0.01, 77.0 + i * 0.01)
+            hm.get_or_add_pothole(28.0 + (i % 5000) * 0.001, 77.0 + i * 0.001)
         elapsed = time.time() - start
         assert len(hm.known_potholes) == 10000
         # O(n^2) at 10k will be slow; just verify correctness, not speed
