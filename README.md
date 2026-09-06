@@ -217,22 +217,23 @@ AI-Powered-Mobile-Urban-Intelligence/
 ├── frontend/                      # React 18 + Vite GIS Command Center
 │   ├── src/
 │   │   ├── components/            # AlertPanel, MiniMap, KPICard, Header, Sidebar
-│   │   ├── pages/                 # Overview, GISMapPage, EventPage, TrafficPage, RoadConditionPage
+│   │   ├── pages/                 # Overview, FleetManagement, GISMapPage, EventPage, TrafficPage, RoadConditionPage
 │   │   ├── services/              # api.js (Dual-mode live backend & demo fallback service)
 │   │   ├── data/                  # mockData.js (Centralized synthetic dataset)
+│   │   ├── layouts/               # MainLayout (Sidebar navigation)
 │   │   └── index.css              # Tailwind CSS styling
 │   └── package.json
 ├── backend/                       # FastAPI REST API & Database Engine
 │   ├── app/
 │   │   ├── models/                # Event, Bus, Hotspot, SystemAlert models
-│   │   ├── routers/               # /events, /buses, /hotspots, /analytics
+│   │   ├── routers/               # /events, /buses (Full CRUD), /hotspots, /analytics
 │   │   ├── schemas/               # Pydantic data validation schemas
 │   │   ├── services/              # hotspot_service.py (50m Haversine clustering & priority)
 │   │   ├── config.py              # Settings & environment configuration
 │   │   ├── database.py            # SQLAlchemy engine & auto-migration
 │   │   └── main.py                # Application entry point & CORS configuration
 │   ├── seed_rich.py               # Comprehensive database seeder with realistic coordinates
-│   ├── tests/                     # 29 Pytest unit & integration test cases
+│   ├── tests/                     # 39 Pytest unit & integration test cases (including test_buses.py)
 │   └── requirements.txt
 ├── edge-ai/
 │   ├── traffic-detection/         # Vehicle detection, SORT tracking & density estimation
@@ -298,7 +299,7 @@ uvicorn app.main:app --reload --port 8000
 ```
 - **API Documentation (Swagger UI):** [http://localhost:8000/docs](http://localhost:8000/docs)
 - **Health Check:** [http://localhost:8000/health](http://localhost:8000/health)
-- **Run Backend Tests:** `pytest backend/tests` (29 passed)
+- **Run Backend Tests:** `pytest backend/tests` (39 passed)
 
 ### 3. Run Standalone Traffic AI
 ```bash

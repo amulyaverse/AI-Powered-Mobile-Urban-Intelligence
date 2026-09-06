@@ -5,9 +5,70 @@ Pydantic schemas for Bus endpoints.
 """
 
 from __future__ import annotations
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
 from datetime import datetime
+
+
+class BusCreate(BaseModel):
+    """Body for POST /api/buses — register a new bus in the fleet."""
+    id: str                                          # e.g. "BUS_099"
+    route: Optional[str] = None                      # e.g. "Route 534"
+    status: str = "Active"                           # Active | Maintenance | Offline
+    camera_status: str = "Active"                    # Active | Offline
+
+    @field_validator("id")
+    @classmethod
+    def validate_id(cls, v: str) -> str:
+        v = v.strip().upper()
+        if not v:
+            raise ValueError("Bus ID cannot be empty")
+        if len(v) > 20:
+            raise ValueError("Bus ID must be 20 characters or fewer")
+        return v
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: str) -> str:
+        allowed = {"Active", "Maintenance", "Offline"}
+        if v not in allowed:
+            raise ValueError(f"status must be one of: {', '.join(sorted(allowed))}")
+        return v
+
+    @field_validator("camera_status")
+    @classmethod
+    def validate_camera_status(cls, v: str) -> str:
+        allowed = {"Active", "Offline"}
+        if v not in allowed:
+            raise ValueError(f"camera_status must be one of: {', '.join(sorted(allowed))}")
+        return v
+
+
+class BusUpdate(BaseModel):
+    """Body for PATCH /api/buses/{bus_id} — partial update of editable fields."""
+    route: Optional[str] = None
+    status: Optional[str] = None
+    camera_status: Optional[str] = None
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        allowed = {"Active", "Maintenance", "Offline"}
+        if v not in allowed:
+            raise ValueError(f"status must be one of: {', '.join(sorted(allowed))}")
+        return v
+
+    @field_validator("camera_status")
+    @classmethod
+    def validate_camera_status(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        allowed = {"Active", "Offline"}
+        if v not in allowed:
+            raise ValueError(f"camera_status must be one of: {', '.join(sorted(allowed))}")
+        return v
 
 
 class BusResponse(BaseModel):
