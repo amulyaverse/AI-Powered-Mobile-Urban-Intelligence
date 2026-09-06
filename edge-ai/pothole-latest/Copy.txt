@@ -1,0 +1,695 @@
+You are a senior Python/ML software engineer responsible for fixing the pothole-detection system in this repository:
+
+https://github.com/YCCMAbhi/pothole-detection.git
+
+A comprehensive pytest test suite has already been created to expose correctness problems in the existing implementation.
+
+Your job is to inspect the ACTUAL repository, understand the existing implementation, and make the MINIMAL production-code changes necessary to satisfy the intended pothole lifecycle and make the legitimate tests pass.
+
+IMPORTANT:
+
+- Do NOT assume filenames, functions, classes, APIs, or storage technologies.
+- Inspect the repository before modifying anything.
+- Do NOT rewrite the system unnecessarily.
+- Preserve the existing YOLO detection architecture unless a change is genuinely required.
+- Do NOT weaken, delete, skip, or modify tests simply to make them pass.
+- If a test expectation conflicts with the repository's clearly documented intended behavior, explain the conflict before changing anything.
+- Fix production-code defects rather than hiding them.
+- Maintain backward compatibility with existing data where reasonably possible.
+- Do not introduce a database if the current file-based architecture is sufficient.
+- Keep the implementation simple and maintainable.
+
+The previously identified issues are summarized below.
+
+==================================================
+
+1. UNIFIED PERSISTENT EVENT ID
+   ==================================================
+
+PROBLEM:
+
+The system currently generates UUIDs inside the pothole/healing cache, but the emitted pothole detection events do not contain that identifier.
+
+A typical detection event currently contains fields equivalent to:
+
+event_type
+confidence
+severity
+bus_id
+camera_id
+timestamp
+latitude
+longitude
+
+but does NOT contain event_id.
+
+This breaks the relationship between:
+
+physical pothole
+↓
+persistent pothole record
+↓
+detection event
+↓
+treatment/resolution event
+
+FIX:
+
+Introduce a persistent identifier for every newly registered physical pothole.
+
+Use the repository's existing UUID mechanism if appropriate rather than inventing a new ID technology.
+
+The ID must:
+
+- be generated exactly once when a genuinely new pothole is registered;
+- be non-empty;
+- be unique among active/persistent potholes;
+- remain unchanged when the pothole is detected repeatedly;
+- survive JSON serialization/deserialization;
+- survive application restart;
+- be associated with the same pothole's future resolution/treatment event.
+
+A detection of an already-known pothole MUST NOT generate a new event_id.
+
+Make the event structure include the identifier using the repository's naming convention, preferably:
+
+"event_id"
+
+unless the existing architecture strongly dictates another name.
+
+Example:
+
+First detection:
+
+{
+"event_id": "abc-123",
+"event_type": "pothole",
+...
+"latitude": 28.6139,
+"longitude": 77.2090
+}
+
+Repeated detection of the same physical pothole must continue referring to:
+
+"event_id": "abc-123"
+
+Do NOT generate:
+
+abc-123
+def-456
+ghi-789
+
+for the same physical pothole merely because it was detected in different frames.
+
+==================================================
+2. EVENT ID MUST SURVIVE SERIALIZATION
+
+Verify that:
+
+event -> JSON -> object
+
+does not change the event ID.
+
+Loading an existing pothole from known_potholes.json must preserve its ID.
+
+Do not regenerate IDs during loading.
+
+If legacy records have only "id" and no "event_id", design a safe backward-compatible migration strategy where possible.
+
+Do not silently create conflicting IDs.
+
+==================================================
+3. CONFIGURABLE DUPLICATE-DETECTION RADIUS
+
+PROBLEM:
+
+The current duplicate-detection logic uses a hard-coded approximately 2 metre threshold even though the system has configurable geographic parameters.
+
+This makes the behavior inconsistent with the requested configurable GPS tolerance.
+
+FIX:
+
+Introduce a clearly named configurable deduplication radius.
+
+For example:
+
+DEDUPLICATION_RADIUS_METERS
+
+or an equivalent configuration field consistent with the existing configuration architecture.
+
+Do NOT hard-code the threshold inside the duplicate-detection function.
+
+Use geographic distance rather than exact floating-point coordinate equality.
+
+The behavior must be:
+
+distance <= configured duplicate radius
+→ same physical pothole
+
+distance > configured duplicate radius
+→ different pothole
+
+Use the repository's existing Haversine implementation if appropriate.
+
+Keep the healing/repaired threshold logically separate from the duplicate-detection threshold.
+
+Do NOT accidentally use the treatment/healing radius as the deduplication radius unless the repository's architecture explicitly intends that.
+
+==================================================
+4. SAME-LOCATION DETECTION
+
+Repeated detections such as:
+
+28.613900, 77.209000
+28.613905, 77.209005
+28.613910, 77.209010
+
+must resolve to the same persistent pothole when they fall within the configured deduplication radius.
+
+The system should:
+
+1. find the existing pothole;
+2. reuse its event_id;
+3. avoid creating another permanent pothole record.
+
+Do not rely on exact coordinate equality.
+
+At the same time, geographically separated potholes must remain independent.
+
+Example:
+
+A:
+28.613900, 77.209000
+
+B:
+28.620000, 77.220000
+
+must result in two independent pothole records and two unique IDs.
+
+==================================================
+5. GPS VALIDATION
+
+Add robust validation at the appropriate GPS-ingestion boundary.
+
+Valid ranges:
+
+latitude:
+-90 <= latitude <= 90
+
+longitude:
+-180 <= longitude <= 180
+
+Reject:
+
+latitude > 90
+latitude < -90
+longitude > 180
+longitude < -180
+
+Also handle:
+
+None
+missing values
+non-numeric strings
+NaN
+infinite values
+
+where appropriate.
+
+If the repository currently accepts numeric strings such as:
+
+"28.6139"
+
+decide whether safe conversion is appropriate.
+
+If conversion is supported, normalize it to numeric values before storage.
+
+If invalid data cannot be safely interpreted, fail gracefully with a useful error.
+
+Do not allow invalid GPS coordinates to enter the persistent pothole dataset.
+
+Boundary values MUST work:
+
+latitude = 90
+latitude = -90
+longitude = 180
+longitude = -180
+
+==================================================
+6. DUPLICATE EVENT/CACHE ID PROTECTION
+
+PROBLEM:
+
+Loading duplicate IDs into a dictionary/cache can silently overwrite an unrelated pothole.
+
+For example:
+
+[
+{
+"id": "DUP",
+"latitude": 28.6139,
+"longitude": 77.2090
+},
+{
+"id": "DUP",
+"latitude": 28.6200,
+"longitude": 77.2200
+}
+]
+
+must NOT silently discard one record.
+
+FIX:
+
+Validate persistent records when loading.
+
+If duplicate IDs are found:
+
+- raise a clear error, OR
+- perform a documented safe migration/recovery strategy.
+
+Do NOT silently overwrite records.
+
+The safest default for corrupted persistent state is generally to fail clearly rather than destroy data.
+
+==================================================
+7. MALFORMED JSON MUST NOT DESTROY DATA
+
+PROBLEM:
+
+If known_potholes.json is malformed, the current startup logic can effectively treat it as an empty dataset and later overwrite the original file.
+
+This is dangerous.
+
+FIX:
+
+If the persistent JSON file exists but cannot be parsed:
+
+- report a clear error;
+- do NOT silently replace the dataset with an empty dataset;
+- do NOT overwrite the malformed file automatically;
+- abort the relevant operation safely.
+
+Preserve the original corrupted file so it can be inspected/recovered.
+
+Handle:
+
+- malformed JSON;
+- empty file;
+- missing file;
+- wrong top-level type;
+- missing required fields;
+- corrupted records.
+
+Missing file may reasonably mean "start with an empty dataset" if that is consistent with the existing application design.
+
+Malformed existing file must NOT be treated identically to a missing file.
+
+==================================================
+8. PERSISTENCE SAFETY
+
+Review every location where:
+
+known_potholes.json
+pothole_events.jsonl
+city_log.jsonl
+rural_log.jsonl
+test logs
+
+are read or written.
+
+Ensure:
+
+- valid JSON remains valid;
+- JSONL records remain independently parseable;
+- writes do not accidentally truncate unrelated records;
+- deletion modifies only the intended pothole;
+- temporary/test data can be isolated;
+- production data is not modified by tests.
+
+If practical, use atomic write semantics for the main JSON cache:
+
+write temporary file
+↓
+flush/close
+↓
+replace original
+
+Do this only if it fits the current architecture and does not unnecessarily complicate the implementation.
+
+==================================================
+9. TREATMENT / REPAIRED LIFECYCLE
+
+Review the current healing implementation carefully.
+
+The intended lifecycle should be conceptually:
+
+NEW
+↓
+ACTIVE
+↓
+TREATED / RESOLVED
+↓
+ARCHIVED or DELETED
+
+The existing implementation appears to infer healing based on consecutive frames in which the pothole is no longer detected near its location.
+
+Do NOT remove this mechanism blindly if it is an intentional part of the existing design.
+
+However, ensure that:
+
+- a currently visible pothole is NOT marked repaired;
+- repeated detection of the pothole does NOT trigger deletion;
+- only the intended healing condition causes resolution;
+- the correct pothole is resolved;
+- unrelated potholes remain untouched;
+- the resolution event refers to the same persistent event_id where possible.
+
+If the repository already has an explicit treatment API/mechanism, use that instead.
+
+Do not invent an unnecessary external treatment service.
+
+==================================================
+10. DELETION / CLEANUP
+
+Ensure the cleanup mechanism removes ONLY the intended treated pothole.
+
+Test:
+
+- first record;
+- middle record;
+- last record;
+- only record;
+- nonexistent event ID;
+- repeated deletion request.
+
+Deleting B from:
+
+A
+B
+C
+
+must result in:
+
+A
+C
+
+with no modification to A or C.
+
+A nonexistent deletion request must not corrupt the dataset.
+
+After deletion:
+
+- JSON remains valid;
+- unrelated records remain;
+- event IDs of unrelated records remain unchanged.
+
+==================================================
+11. POST-REPAIR REDETECTION
+
+This is especially important.
+
+Suppose:
+
+Pass 1:
+A detected
+B detected
+C detected
+
+Then B is successfully treated and removed/archived.
+
+Pass 3:
+
+A detected
+B location encountered
+C detected
+
+Expected:
+
+A remains active and keeps its original event_id.
+
+C remains active and keeps its original event_id.
+
+B does NOT reappear as an active untreated pothole merely because its coordinates are encountered again, UNLESS the system actually receives evidence that a new pothole now exists at that location.
+
+This distinction is important:
+
+"same location encountered"
+
+does NOT automatically mean:
+
+"same pothole currently exists."
+
+After a confirmed repair, a genuinely new pothole at that location may legitimately receive a new event_id.
+
+==================================================
+12. MODEL / INFERENCE
+
+Do not rewrite the YOLO model or retrain anything.
+
+Review the current inference path.
+
+Ensure:
+
+- empty inference results do not crash;
+- multiple detections work;
+- confidence filtering works;
+- detection output remains compatible with the existing pipeline;
+- model metadata/confidence is preserved where currently produced.
+
+Do not require an exact accuracy score unless suitable ground-truth data exists.
+
+Tests may mock model inference for deterministic lifecycle testing.
+
+==================================================
+13. TIMESTAMP HANDLING
+
+Review timestamp generation.
+
+If datetime.utcnow() or another deprecated API is used, migrate to a timezone-aware UTC representation where practical.
+
+For example, use an aware UTC datetime rather than a naive UTC datetime.
+
+Maintain compatibility with the current event serialization format if possible.
+
+Timestamps must remain JSON serializable.
+
+==================================================
+14. BACKWARD COMPATIBILITY
+
+Before changing schemas, inspect all code that reads:
+
+known_potholes.json
+pothole_events.jsonl
+city_log.jsonl
+rural_log.jsonl
+
+Do not break existing readers unnecessarily.
+
+If old records use:
+
+"id"
+
+while new events use:
+
+"event_id"
+
+provide a controlled compatibility strategy.
+
+Document the migration behavior.
+
+Never silently assign the same ID to multiple physical potholes.
+
+==================================================
+15. TEST SUITE
+
+The repository should contain a pytest suite covering at minimum:
+
+tests/
+test_detection.py
+test_event_id.py
+test_gps.py
+test_duplicates.py
+test_persistence.py
+test_deletion.py
+test_end_to_end.py
+test_edge_cases.py
+test_performance.py
+
+Adapt filenames to the actual repository architecture if necessary.
+
+The tests must:
+
+- use pytest;
+- use temporary directories/files;
+- mock GPS;
+- mock model inference where appropriate;
+- never modify production JSON files;
+- be independently repeatable;
+- clean up test data automatically.
+
+Do NOT weaken assertions just to achieve green tests.
+
+==================================================
+16. PERFORMANCE
+
+Verify deduplication and cleanup against synthetic datasets of:
+
+100 records
+1,000 records
+10,000 records
+
+Measure runtime where practical.
+
+Do not prematurely optimize.
+
+First make correctness reliable.
+
+If lookup is unnecessarily O(n) and becomes problematic at 10,000 records, identify the bottleneck and make a minimal optimization only if justified by measured results.
+
+==================================================
+17. RUN EVERYTHING
+
+After making the fixes:
+
+1. Install/update only necessary dependencies.
+2. Run the complete pytest suite.
+3. Run it a second time to verify repeatability.
+4. Run coverage if practical.
+5. Check for warnings.
+6. Run existing application tests, if any.
+7. Perform basic syntax/import validation.
+
+Do NOT claim success unless the tests actually ran.
+
+If failures remain:
+
+- determine whether they are genuine production defects;
+- fix the production implementation;
+- rerun the affected tests;
+- rerun the complete suite.
+
+==================================================
+18. FINAL ACCEPTANCE CRITERIA
+
+The final implementation must satisfy this lifecycle:
+
+DETECT
+↓
+CREATE/LOCATE PERSISTENT POTHOLE
+↓
+GENERATE event_id ONLY FOR NEW POTHOLE
+↓
+ATTACH VALID GPS
+↓
+SAVE
+↓
+DETECT SAME LOCATION AGAIN
+↓
+GEOGRAPHICALLY MATCH EXISTING POTHOLE
+↓
+REUSE SAME event_id
+↓
+DO NOT CREATE UNNECESSARY DUPLICATE
+↓
+POTHOLE IS TREATED/RESOLVED
+↓
+REMOVE OR ARCHIVE CORRECT RECORD
+↓
+PRESERVE UNRELATED RECORDS
+↓
+DETECT LOCATION AGAIN
+↓
+DO NOT INCORRECTLY RESTORE THE REPAIRED POTHOLE
+↓
+IF A GENUINELY NEW POTHOLE EXISTS THERE,
+CREATE A NEW event_id
+
+==================================================
+19. FINAL REPORT
+
+After implementation and testing, provide a report containing:
+
+A. Files modified
+For every modified file:
+
+- path
+- reason for modification
+- summary of change
+
+B. Architecture after fixes
+Explain:
+
+- detection flow
+- event creation
+- event ID generation
+- GPS validation
+- deduplication
+- persistence
+- treatment
+- deletion/archive
+- restart behavior
+
+C. Test results
+
+Provide EXACT numbers:
+
+Total tests:
+Passed:
+Failed:
+Skipped:
+Coverage:
+
+Do not invent numbers.
+
+D. Lifecycle result
+
+Explicitly state PASS/FAIL for:
+
+DETECT
+GENERATE EVENT ID
+ATTACH GPS
+SAVE
+DETECT SAME LOCATION
+RECOGNIZE EXISTING POTHOLE
+TREAT
+REMOVE/ARCHIVE
+REDETECT LOCATION
+PREVENT INCORRECT DUPLICATE
+
+E. Remaining issues
+
+For every unresolved issue:
+
+File:
+Function/class:
+Problem:
+Reproduction:
+Expected:
+Actual:
+Recommended fix:
+
+F. Test command
+
+Provide the exact command required to run the complete suite, for example:
+
+pytest -v --cov=...
+
+but use the actual command/configuration you implemented.
+
+==================================================
+MOST IMPORTANT RULE
+
+DO NOT MAKE THE TESTS GREEN BY CHANGING THE TESTS TO MATCH BUGGY BEHAVIOR.
+
+The purpose of this work is to make the production pothole-detection system correctly support:
+
+unique persistent pothole identity,
+GPS-based deduplication,
+safe persistence,
+safe deletion,
+repair lifecycle,
+restart persistence,
+and reliable end-to-end repeated vehicle passes.
+
+Inspect first. Modify minimally. Test thoroughly. Report honestly.
