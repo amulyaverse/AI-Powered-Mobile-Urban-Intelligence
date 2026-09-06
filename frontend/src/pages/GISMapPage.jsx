@@ -4,8 +4,10 @@ import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { getEvents, getHotspots } from '../services/api';
-import { Filter, Flame, Check } from 'lucide-react';
+import { useEventWebSocket } from '../hooks/useEventWebSocket';
+import { Filter, Flame, Check, Clock } from 'lucide-react';
 import { LoadingState, ErrorState } from '../components/PageStatusState';
+import { formatDateTime, formatRelativeTime } from '../utils/dateTime';
 
 // Fix for default marker icons in react-leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -44,6 +46,18 @@ export default function GISMapPage() {
   // Delhi coordinates as center
   const center = [28.6139, 77.2090];
 
+  const { latestEvent } = useEventWebSocket();
+
+  // Prepend live incoming detection markers directly on the GIS map
+  useEffect(() => {
+    if (!latestEvent?.event_id || latestEvent.latitude == null || latestEvent.longitude == null) return;
+    if (selectedType !== 'all' && latestEvent.event_type !== selectedType) return;
+    setEvents((prev) => {
+      if (prev.some((e) => e.event_id === latestEvent.event_id)) return prev;
+      return [latestEvent, ...prev];
+    });
+  }, [latestEvent, selectedType]);
+
   const loadData = useCallback(async (isInitial = false) => {
     if (isInitial) setLoading(true);
     try {
@@ -57,7 +71,7 @@ export default function GISMapPage() {
       setError(null);
     } catch (err) {
       console.error('[GISMap] Failed to load GIS data:', err);
-      setError(err.message || 'Failed to load GIS map layer data.');
+      if (isInitial) setError(err.message || 'Failed to load GIS map layer data.');
     } finally {
       if (isInitial) setLoading(false);
     }
@@ -65,6 +79,14 @@ export default function GISMapPage() {
 
   useEffect(() => {
     loadData(true);
+  }, [loadData]);
+
+  // Periodic background refresh every 6s to update hotspots & fleet detections
+  useEffect(() => {
+    const poller = setInterval(() => {
+      loadData(false);
+    }, 6000);
+    return () => clearInterval(poller);
   }, [loadData]);
 
   if (loading && events.length === 0 && hotspots.length === 0) {
@@ -215,6 +237,12 @@ export default function GISMapPage() {
                           <span className="text-slate-500">Priority Score:</span>{' '}
                           <b>{(hs.priority_score || 5).toFixed(1)}</b>
                         </p>
+                        {(hs.last_seen || hs.last_updated || hs.created_at) && (
+                          <p className="text-[11px] text-slate-500 pt-1 border-t border-slate-100 flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span>Active: {formatRelativeTime(hs.last_seen || hs.last_updated || hs.created_at)}</span>
+                          </p>
+                        )}
                       </div>
                     </div>
                   </Popup>
@@ -256,6 +284,17 @@ export default function GISMapPage() {
                       <p>
                         <span className="text-slate-500">Confidence:</span> {Math.round(event.confidence * 100)}%
                       </p>
+                      {event.timestamp && (
+                        <div className="text-xs text-slate-600 pt-1 border-t border-slate-100 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>{formatDateTime(event.timestamp, 'dd MMM yyyy, HH:mm:ss')}</span>
+                        </div>
+                      )}
+                      {event.timestamp && (
+                        <p className="text-[11px] text-slate-400 pl-5">
+                          ({formatRelativeTime(event.timestamp)})
+                        </p>
+                      )}
                       {event.repeated_detections > 1 && (
                         <p className="text-red-600 font-semibold text-xs">
                           Persistent Issue: {event.repeated_detections} detections

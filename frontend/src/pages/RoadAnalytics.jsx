@@ -128,6 +128,54 @@ export default function RoadAnalytics() {
           </div>
         </div>
       </div>
+
+      {/* PR #37 Edge AI Architecture & Model Card */}
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-xl p-6 text-white shadow-md border border-slate-700">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-700/80 pb-4 mb-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="bg-amber-500 text-slate-950 font-extrabold text-[11px] px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                PR #37 Edge AI Module
+              </span>
+              <span className="text-slate-400 text-xs font-mono">Pothole_Road_Condition_Model</span>
+            </div>
+            <h3 className="text-lg font-bold text-slate-100">
+              YOLOv8 Real-Time Pothole & Road Damage Detection Pipeline
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Indian road defect computer vision model trained on Roboflow v5 dataset with dual severity heuristics.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-xs font-semibold">
+              Verified Pipeline ✅
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white/5 border border-white/10 rounded-lg p-3.5">
+            <p className="text-[11px] text-slate-400 font-medium">Precision</p>
+            <p className="text-2xl font-bold text-amber-400 mt-1">84.2%</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Test split validation</p>
+          </div>
+          <div className="bg-white/5 border border-white/10 rounded-lg p-3.5">
+            <p className="text-[11px] text-slate-400 font-medium">Recall Rate</p>
+            <p className="text-2xl font-bold text-amber-400 mt-1">78.9%</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Surface defect hit rate</p>
+          </div>
+          <div className="bg-white/5 border border-white/10 rounded-lg p-3.5">
+            <p className="text-[11px] text-slate-400 font-medium">mAP @ 50</p>
+            <p className="text-2xl font-bold text-emerald-400 mt-1">81.6%</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">YOLOv8 Nano backbone</p>
+          </div>
+          <div className="bg-white/5 border border-white/10 rounded-lg p-3.5">
+            <p className="text-[11px] text-slate-400 font-medium">Active Heuristic</p>
+            <p className="text-sm font-bold text-blue-300 mt-2">Approach A & B</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Width & Depth Scaling</p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

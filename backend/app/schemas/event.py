@@ -9,7 +9,7 @@ EventStatusUpdate → body for PATCH /api/events/{id}/status
 """
 
 from __future__ import annotations
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator, field_serializer
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 import uuid
@@ -57,6 +57,13 @@ class EventCreate(BaseModel):
     source_frame: Optional[int] = None
     frame_coverage_ratio: Optional[float] = None
 
+    # PR 37 & 40: Pothole / road defect telemetry fields
+    bbox: Optional[Any] = None
+    width_ratio: Optional[float] = None
+    area_ratio: Optional[float] = None
+    severity_method: Optional[str] = None
+    surface_condition: Optional[str] = None
+
     # Nested helper inputs for edge-AI adapters
     gps: Optional[Dict[str, float]] = None
     vehicle_counts: Optional[Dict[str, int]] = None
@@ -85,6 +92,12 @@ class EventCreate(BaseModel):
                 d["latitude"] = gps_data.get("lat", gps_data.get("latitude"))
             if "longitude" not in d or d["longitude"] is None:
                 d["longitude"] = gps_data.get("lon", gps_data.get("longitude"))
+
+        # Fallback default coordinates for raw PR 37 telemetry logs missing GPS
+        if d.get("latitude") is None:
+            d["latitude"] = 28.6139
+        if d.get("longitude") is None:
+            d["longitude"] = 77.2090
 
         # 3. Unpack nested vehicle_counts dict if provided
         if "vehicle_counts" in d and isinstance(d["vehicle_counts"], dict):
@@ -117,14 +130,26 @@ class EventCreate(BaseModel):
             else:
                 d["severity"] = "low"
 
-        # 5. Timestamp handling (epoch seconds, timestamp_iso, or ISO string)
+        # 5. Timestamp handling (epoch seconds, timestamp_iso, space string, or ISO string)
         raw_ts = d.get("timestamp")
         if isinstance(raw_ts, (int, float)):
             d["timestamp"] = datetime.fromtimestamp(raw_ts, tz=timezone.utc)
+        elif isinstance(raw_ts, str):
+            try:
+                if " " in raw_ts and "T" not in raw_ts:
+                    d["timestamp"] = datetime.fromisoformat(raw_ts.replace(" ", "T")).replace(tzinfo=timezone.utc)
+            except Exception:
+                pass
         elif raw_ts is None and "timestamp_iso" in d:
             d["timestamp"] = d["timestamp_iso"]
 
-        # 6. Status default
+        # 6. Bounding box formatting
+        raw_bbox = d.get("bbox")
+        if isinstance(raw_bbox, (list, tuple)):
+            import json
+            d["bbox"] = json.dumps([round(float(v), 2) for v in raw_bbox])
+
+        # 7. Status default
         if not d.get("status"):
             d["status"] = "new"
 
@@ -179,9 +204,9 @@ class EventResponse(BaseModel):
     timestamp: datetime
     evidence: Optional[str]
     status: str
-    repeated_detections: int
-    hotspot_id: Optional[int]
-    created_at: datetime
+    repeated_detections: int = 1
+    hotspot_id: Optional[int] = None
+    created_at: Optional[datetime] = None
 
     # Traffic fields (None for non-vehicle_count events)
     car_count: Optional[int] = None
@@ -194,4 +219,19 @@ class EventResponse(BaseModel):
     source_frame: Optional[int] = None
     frame_coverage_ratio: Optional[float] = None
 
+    # Road damage fields (PR 37 & 40)
+    bbox: Optional[str] = None
+    width_ratio: Optional[float] = None
+    area_ratio: Optional[float] = None
+    severity_method: Optional[str] = None
+    surface_condition: Optional[str] = None
+
     model_config = {"from_attributes": True}
+
+    @field_serializer("timestamp", "created_at", check_fields=False)
+    def serialize_utc_datetime(self, dt: Optional[datetime]) -> Optional[str]:
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.isoformat()
