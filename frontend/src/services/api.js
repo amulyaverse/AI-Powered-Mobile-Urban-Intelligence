@@ -328,6 +328,86 @@ export const getBusById = async (id) => {
   return normalizeBus(data);
 };
 
+/**
+ * Create a new bus in the fleet.
+ * NOTE: This is a WRITE operation and REQUIRES the live backend.
+ * It does NOT fall back to demo data — it throws a clear error in demo/offline mode
+ * so the user knows the backend must be running.
+ */
+export const createBus = async (data) => {
+  if (currentMode === 'demo' || connectionStatus === 'offline_fallback') {
+    throw new Error(
+      'Fleet Management CRUD requires the live backend. ' +
+      'Please start the FastAPI server (cd backend && uvicorn app.main:app --reload --port 8000) ' +
+      'and switch to "Live API" mode in Platform Settings.'
+    );
+  }
+  const url = `${API_BASE_URL}/api/buses`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    const detail = errorBody?.detail || `HTTP ${response.status}`;
+    throw new Error(detail);
+  }
+  const created = await response.json();
+  return normalizeBus(created);
+};
+
+/**
+ * Update a bus's editable fields (route, status, camera_status).
+ * WRITE operation — requires live backend.
+ */
+export const updateBus = async (id, data) => {
+  if (currentMode === 'demo' || connectionStatus === 'offline_fallback') {
+    throw new Error(
+      'Fleet Management CRUD requires the live backend. ' +
+      'Please start the FastAPI server and switch to "Live API" mode in Platform Settings.'
+    );
+  }
+  const url = `${API_BASE_URL}/api/buses/${id}`;
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    const detail = errorBody?.detail || `HTTP ${response.status}`;
+    throw new Error(detail);
+  }
+  const updated = await response.json();
+  return normalizeBus(updated);
+};
+
+/**
+ * Delete a bus from the fleet.
+ * WRITE operation — requires live backend.
+ * Returns 409 conflict if the bus has associated events.
+ */
+export const deleteBus = async (id) => {
+  if (currentMode === 'demo' || connectionStatus === 'offline_fallback') {
+    throw new Error(
+      'Fleet Management CRUD requires the live backend. ' +
+      'Please start the FastAPI server and switch to "Live API" mode in Platform Settings.'
+    );
+  }
+  const url = `${API_BASE_URL}/api/buses/${id}`;
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: { Accept: 'application/json' },
+  });
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    const detail = errorBody?.detail || `HTTP ${response.status}`;
+    throw new Error(detail);
+  }
+  // 204 No Content — no body to parse
+};
+
 // ── Events ────────────────────────────────────────────────────────────────────
 export const getEvents = async (filters = {}) => {
   const cleaned = Object.entries(filters).reduce((acc, [k, v]) => {

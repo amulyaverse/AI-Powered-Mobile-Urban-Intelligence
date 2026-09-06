@@ -8,6 +8,7 @@ import {
   Activity,
   Settings,
   Bus,
+  Truck,
   X,
   Shield,
   Server,
@@ -29,6 +30,7 @@ import {
 const navItems = [
   { path: '/', label: 'Overview', icon: LayoutDashboard },
   { path: '/live', label: 'Live Monitoring', icon: RadioReceiver },
+  { path: '/fleet', label: 'Fleet Management', icon: Truck },
   { path: '/events', label: 'Incidents & Events', icon: AlertTriangle },
   { path: '/map', label: 'GIS Map', icon: Map },
   { path: '/traffic', label: 'Traffic Analytics', icon: Activity },

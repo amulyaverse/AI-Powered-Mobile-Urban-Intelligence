@@ -189,14 +189,14 @@ AI-Powered-Mobile-Urban-Intelligence/
 ├── frontend/               # React + Vite GIS dashboard
 │   ├── src/
 │   │   ├── components/     # Reusable UI: AlertPanel, MiniMap, KPICards
-│   │   ├── pages/          # Overview, LiveMonitoring, Events, GIS Map, Analytics
+│   │   ├── pages/          # Overview, LiveMonitoring, FleetManagement, Events, GIS Map, Analytics
 │   │   ├── data/           # mockData.js (Centralized synthetic data)
 │   │   ├── services/       # api.js (Service layer ready for backend integration)
 │   │   └── layouts/        # MainLayout (Sidebar & navigation)
 │   └── package.json
 ├── backend/                # FastAPI Backend & Database Engine
 │   ├── app/
-│   │   ├── routers/        # /api/events, /api/buses, /api/analytics, /api/hotspots
+│   │   ├── routers/        # /api/events, /api/buses (Full CRUD), /api/analytics, /api/hotspots
 │   │   ├── models/         # SQLAlchemy models: Event, Bus, Hotspot, Alert
 │   │   ├── schemas/        # Pydantic validation schemas
 │   │   ├── services/       # hotspot_service.py (50m spatial clustering)
