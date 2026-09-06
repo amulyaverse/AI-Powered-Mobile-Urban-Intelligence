@@ -11,7 +11,7 @@
 | Subsystem / Module | Status | Technology Stack | Implementation Location | Verified Test State |
 |---|---|---|---|---|
 | **Traffic AI & Vision** | ✅ COMPLETED | YOLOv8, SORT Kalman Tracker, OpenCV | [`edge-ai/traffic-detection/`](edge-ai/traffic-detection/) | Live HUD, line-crossing counting, density estimation |
-| **Road AI (Potholes)** | ✅ COMPLETED | YOLOv8 Defect Detection, Multi-Inference Engine | [`edge-ai/Pothole_Road_Condition_Model/`](edge-ai/Pothole_Road_Condition_Model/) | Video pipeline, width ratio severity scoring, JSONL streams |
+| **Road AI (Potholes)** | ✅ COMPLETED | YOLOv8 Defect Detection, Multi-Inference Engine | [`edge-ai/pothole-detection/`](edge-ai/pothole-detection/) · [`docs/models/road-ai.md`](docs/models/road-ai.md) | 14/14 Pytest tests passing; Video pipeline, severity scoring, JSONL streams |
 | **Backend REST API** | ✅ COMPLETED | FastAPI, SQLAlchemy, Pydantic | [`backend/app/`](backend/app/) | 29/29 Pytest unit & integration tests passing |
 | **Spatial Clustering & Intelligence** | ✅ COMPLETED | Haversine 50m Clustering, Priority Formula | [`backend/app/services/hotspot_service.py`](backend/app/services/hotspot_service.py) | Dynamic multi-pass hotspot correlation |
 | **Edge Integration & Streamer** | ✅ COMPLETED | Python, GPS Simulator, HTTP Event Client | [`integration/`](integration/) | End-to-end video → AI → GPS → Backend pipeline |
@@ -131,11 +131,11 @@ flowchart TD
 - **Directional Counting:** Configurable virtual counting line tracking inbound/outbound transit flows.
 - **Density Estimation:** Real-time occupancy categorization (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`) rendered with a live visual HUD.
 
-### B. Road Condition & Pothole AI (`edge-ai/Pothole_Road_Condition_Model/`)
-- **Model:** YOLOv8 road defect detection trained on surface defect datasets.
-- **Multi-Approach Inference:** Supports bounding-box ratio severity scoring (Approach A) and grid-based spatial coverage analysis (Approach B).
-- **Automated Severity Grading:** Width-to-frame ratio heuristically maps defects to `low`, `medium`, and `high` severity.
-- **Continuous Stream Output:** Outputs standardized JSONL event streams matching the central schema.
+### B. Road Condition & Pothole AI ([`edge-ai/pothole-detection/`](edge-ai/pothole-detection/))
+- **Model:** YOLOv8 road defect detection optimized for edge device inference. Documentation: [`docs/models/road-ai.md`](docs/models/road-ai.md).
+- **Multi-Approach Inference:** Supports bounding-box ratio severity scoring (Approach A) and grid-based spatial coverage analysis (Approach B) in [`edge-ai/Pothole_Road_Condition_Model/`](edge-ai/Pothole_Road_Condition_Model/).
+- **Automated Severity Grading:** Explainable area ratio ($\text{area}_{\text{bbox}} / \text{area}_{\text{frame}}$) and width ratio heuristically maps defects to `low`, `medium`, and `high` severity.
+- **Continuous Stream Output:** Outputs standardized JSON and JSONL event streams matching the central integration schema.
 
 ### C. FastAPI Backend & Database Engine (`backend/app/`)
 - **FastAPI Endpoints:**
