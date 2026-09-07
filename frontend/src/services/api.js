@@ -41,8 +41,13 @@ const REQUEST_TIMEOUT_MS = 3500;
  * e.g. http://localhost:8000/api/ws/events → ws://localhost:8000/api/ws/events
  */
 export function getWsUrl(path) {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  if (!ENV_BASE_URL && typeof window !== 'undefined' && window.location) {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${window.location.host}${normalizedPath}`;
+  }
   const base = API_BASE_URL.replace(/^http/, 'ws');
-  return `${base}${path}`;
+  return `${base}${normalizedPath}`;
 }
 
 // ── Reactive Connection State & Auto-Reconnection Polling ─────────────────────

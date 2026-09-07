@@ -6,13 +6,14 @@ with HTTP range request streaming for browser <video> players and live inference
 """
 
 from pathlib import Path
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
 
 router = APIRouter(prefix="/api/videos", tags=["Videos"])
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 POTHOLE_VIDEOS_DIR = PROJECT_ROOT / "edge-ai" / "Pothole_Road_Condition_Model"
+CHUNK_SIZE = 1024 * 512  # 512 KB
 
 SAMPLE_VIDEOS = [
     {
@@ -63,9 +64,9 @@ def list_sample_videos():
 
 
 @router.get("/stream/{filename}")
-def stream_sample_video(filename: str):
+def stream_sample_video(filename: str, request: Request):
     """
-    Stream a sample MP4 video with HTTP 206 Range request support.
+    Stream a sample MP4 video with HTTP 206 Partial Content Range request support for seeking.
     """
     safe_filename = Path(filename).name
     file_path = POTHOLE_VIDEOS_DIR / safe_filename
@@ -73,8 +74,86 @@ def stream_sample_video(filename: str):
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail=f"Sample video '{safe_filename}' not found.")
 
-    return FileResponse(
-        path=str(file_path),
-        media_type="video/mp4",
-        filename=safe_filename,
+    file_size = file_path.stat().st_size
+    range_header = request.headers.get("range")
+
+    if not range_header:
+        def iter_full_file():
+            with open(file_path, "rb") as f:
+                while chunk := f.read(CHUNK_SIZE):
+                    yield chunk
+
+        return StreamingResponse(
+            iter_full_file(),
+            status_code=200,
+            headers={
+                "Accept-Ranges": "bytes",
+                "Content-Length": str(file_size),
+                "Content-Type": "video/mp4",
+            },
+        )
+
+    try:
+        units, range_val = range_header.strip().split("=", 1)
+        if units.lower() != "bytes":
+            return Response(
+                status_code=416,
+                headers={"Content-Range": f"bytes */{file_size}"},
+            )
+
+        parts = range_val.split("-", 1)
+        start_str, end_str = parts[0].strip(), parts[1].strip()
+
+        if start_str and end_str:
+            start = int(start_str)
+            end = int(end_str)
+        elif start_str:
+            start = int(start_str)
+            end = file_size - 1
+        elif end_str:
+            start = max(0, file_size - int(end_str))
+            end = file_size - 1
+        else:
+            return Response(
+                status_code=416,
+                headers={"Content-Range": f"bytes */{file_size}"},
+            )
+
+        if start >= file_size or start < 0 or end >= file_size or start > end:
+            return Response(
+                status_code=416,
+                headers={"Content-Range": f"bytes */{file_size}"},
+            )
+
+    except Exception:
+        return Response(
+            status_code=416,
+            headers={"Content-Range": f"bytes */{file_size}"},
+        )
+
+    content_length = end - start + 1
+
+    def iter_range(offset: int, length: int):
+        with open(file_path, "rb") as f:
+            f.seek(offset)
+            bytes_left = length
+            while bytes_left > 0:
+                read_bytes = min(bytes_left, CHUNK_SIZE)
+                data = f.read(read_bytes)
+                if not data:
+                    break
+                bytes_left -= len(data)
+                yield data
+
+    headers = {
+        "Content-Range": f"bytes {start}-{end}/{file_size}",
+        "Accept-Ranges": "bytes",
+        "Content-Length": str(content_length),
+        "Content-Type": "video/mp4",
+    }
+
+    return StreamingResponse(
+        iter_range(start, content_length),
+        status_code=206,
+        headers=headers,
     )

@@ -11,13 +11,40 @@ import {
   Compass,
 } from 'lucide-react';
 import { formatDateTime } from '../utils/dateTime';
+import { API_BASE_URL } from '../services/api';
+
+/**
+ * Resolves an evidence URL to include backend host in production deployments
+ * (e.g. Vercel frontend calling a remote Railway backend).
+ */
+export function resolveEvidenceUrl(url) {
+  if (!url) return '';
+  if (
+    url.startsWith('http://') ||
+    url.startsWith('https://') ||
+    url.startsWith('data:') ||
+    url.startsWith('blob:')
+  ) {
+    return url;
+  }
+  const isLocalDev =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+  const normalizedPath = url.startsWith('/') ? url : `/${url}`;
+  if (!isLocalDev && API_BASE_URL && !API_BASE_URL.includes('localhost') && !API_BASE_URL.includes('127.0.0.1')) {
+    return `${API_BASE_URL}${normalizedPath}`;
+  }
+  return normalizedPath;
+}
 
 /**
  * Returns a fallback frame from the project's actual edge-AI video captures
  * when an event doesn't already have an explicit valid evidence image.
  */
 export function getEvidenceFrameUrl(event) {
-  if (!event) return '/evidence/pothole_city_front.jpg';
+  let raw = '/evidence/pothole_city_front.jpg';
+  if (!event) return resolveEvidenceUrl(raw);
 
   let ev = (event.evidence || '').trim();
   if (ev) {
@@ -27,12 +54,12 @@ export function getEvidenceFrameUrl(event) {
       if (ev.includes('\\')) {
         const parts = ev.split(/[/\\]/);
         const fname = parts[parts.length - 1];
-        if (fname) return `/evidence/${fname}`;
+        if (fname) return resolveEvidenceUrl(`/evidence/${fname}`);
       }
       if (!ev.startsWith('http://') && !ev.startsWith('https://') && !ev.startsWith('/')) {
-        return `/${ev}`;
+        return resolveEvidenceUrl(`/${ev}`);
       }
-      return ev;
+      return resolveEvidenceUrl(ev);
     }
   }
 
@@ -42,26 +69,26 @@ export function getEvidenceFrameUrl(event) {
   const surface = (event.surface_condition || '').toLowerCase();
 
   if (type === 'congestion' || type === 'vehicle_count') {
-    return '/evidence/traffic_city.jpg';
+    return resolveEvidenceUrl('/evidence/traffic_city.jpg');
   }
 
   // If there's an event ID number, map deterministically across real snapshots
   const idMatch = (event.event_id || '').match(/\d+/);
   if (idMatch) {
     const num = (parseInt(idMatch[0], 10) % 30) + 1;
-    return `/evidence/pr37_snap_${String(num).padStart(3, '0')}.jpg`;
+    return resolveEvidenceUrl(`/evidence/pr37_snap_${String(num).padStart(3, '0')}.jpg`);
   }
 
   if (type === 'road_defect' || surface === 'road_defect') {
-    return '/evidence/pothole_city_side.jpg';
+    return resolveEvidenceUrl('/evidence/pothole_city_side.jpg');
   }
   if (surface === 'severe_crack' || sev === 'critical') {
-    return '/evidence/pothole_rural_severe.jpg';
+    return resolveEvidenceUrl('/evidence/pothole_rural_severe.jpg');
   }
   if (sev === 'high') {
-    return '/evidence/pothole_city_front_close.jpg';
+    return resolveEvidenceUrl('/evidence/pothole_city_front_close.jpg');
   }
-  return '/evidence/pothole_city_front.jpg';
+  return resolveEvidenceUrl('/evidence/pothole_city_front.jpg');
 }
 
 /**
@@ -172,9 +199,10 @@ export default function CapturedEvidenceViewer({
   const isExpandedView = onToggleExpand ? isExpanded : internalFullscreen;
   const handleToggleExpand = onToggleExpand || (() => setInternalFullscreen(!internalFullscreen));
 
-  const fallbackUrl = (event.event_type === 'congestion' || event.event_type === 'vehicle_count')
+  const fallbackRaw = (event.event_type === 'congestion' || event.event_type === 'vehicle_count')
     ? '/evidence/traffic_city.jpg'
     : '/evidence/pothole_city_front.jpg';
+  const fallbackUrl = resolveEvidenceUrl(fallbackRaw);
   const frameUrl = imgError ? fallbackUrl : getEvidenceFrameUrl(event);
   const box = getBoundingBoxStyle(event);
 

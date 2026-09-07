@@ -40,6 +40,7 @@ from app.services.inference_engine import InferenceEngine
 from app.services.event_aggregator import get_aggregator
 from app.services.ws_broadcaster import get_broadcaster
 from app.services.hotspot_service import process_event_for_hotspot
+from app.services.bus_service import upsert_bus
 
 router = APIRouter(tags=["WebSocket"])
 settings = get_settings()
@@ -67,20 +68,7 @@ def _get_bus_coordinates_sync(bus_id: str, fallback_lat: float | None, fallback_
         db.close()
 
 
-# ── Bus upsert (mirrors logic in routers/events.py) ──────────────────────────
 
-def _upsert_bus(db: Session, bus_id: str, lat: float, lng: float, density: str | None) -> None:
-    bus = db.query(Bus).filter(Bus.id == bus_id).first()
-    if not bus:
-        bus = Bus(id=bus_id, route=None)
-        db.add(bus)
-
-    density_map = {"LOW": "Low", "MEDIUM": "Medium", "HIGH": "High", "CRITICAL": "High"}
-    bus.last_lat = lat
-    bus.last_lng = lng
-    bus.last_traffic = density_map.get(density or "", "Unknown")
-    bus.last_seen = datetime.now(timezone.utc)
-    bus.status = "Active"
 
 
 # ── Synchronous event ingestion (run in a thread executor) ───────────────────
@@ -101,7 +89,7 @@ def _ingest_event_sync(
 
     db = _get_db()
     try:
-        _upsert_bus(db, bus_id, lat, lng, result.density)
+        upsert_bus(db, bus_id, lat, lng, result.density)
         db.flush()
 
         assigned_id = f"EVT_{uuid.uuid4().hex[:8]}"
@@ -219,7 +207,7 @@ async def camera_stream(
     engine = InferenceEngine(mode=mode)
 
     # Log session start (sync, one-off)
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     session_id: int = await loop.run_in_executor(
         None, _create_session_sync, bus_id, mode
     )

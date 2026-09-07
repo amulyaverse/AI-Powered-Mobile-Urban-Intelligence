@@ -38,6 +38,19 @@ def test_stream_sample_video():
     response = client.get("/api/videos/stream/cityRoad_potHoles.mp4")
     assert response.status_code in (200, 206)
     assert "video/mp4" in response.headers.get("content-type", "")
+    assert "accept-ranges" in response.headers
+
+def test_stream_sample_video_range_request():
+    """Verify HTTP Range requests return 206 with Content-Range."""
+    response = client.get(
+        "/api/videos/stream/cityRoad_potHoles.mp4",
+        headers={"Range": "bytes=0-1023"}
+    )
+    assert response.status_code == 206
+    assert "video/mp4" in response.headers.get("content-type", "")
+    assert "content-range" in response.headers
+    assert response.headers["content-range"].startswith("bytes 0-1023/")
+    assert len(response.content) == 1024
 
 
 def test_stream_nonexistent_video():

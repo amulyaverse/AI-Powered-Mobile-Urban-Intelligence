@@ -81,6 +81,7 @@ class BusResponse(BaseModel):
     last_lng: Optional[float]
     last_traffic: str
     last_seen: Optional[datetime]
+    created_at: Optional[datetime] = None
     model_config = {"from_attributes": True}
 
     @field_serializer("last_seen", "created_at", check_fields=False)

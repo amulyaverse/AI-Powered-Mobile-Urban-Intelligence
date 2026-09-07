@@ -59,8 +59,11 @@ export function useEventWebSocket() {
     return () => { cancelled = true; };
   }, []);
 
-  // ── 2. Fallback polling every 5s to guarantee fresh data ────────────────────
+  // ── 2. Fallback polling every 5s when WebSocket is NOT connected ─────────────
   useEffect(() => {
+    // Skip fallback polling while WebSocket is actively streaming events
+    if (wsStatus === 'connected') return;
+
     const poller = setInterval(async () => {
       if (unmountedRef.current) return;
       try {
@@ -81,7 +84,7 @@ export function useEventWebSocket() {
     }, 5000);
 
     return () => clearInterval(poller);
-  }, []);
+  }, [wsStatus]);
 
   // ── 3. WebSocket Real-Time Connection ───────────────────────────────────────
   const connect = useCallback(() => {

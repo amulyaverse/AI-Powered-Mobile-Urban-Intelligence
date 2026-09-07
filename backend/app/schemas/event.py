@@ -80,7 +80,7 @@ class EventCreate(BaseModel):
         raw_type = d.get("event_type")
         if isinstance(raw_type, str):
             raw_lower = raw_type.lower()
-            if raw_lower in ("traffic_snapshot", "trafficsnapshot"):
+            if raw_lower in ("traffic_snapshot", "trafficsnapshot", "congestion"):
                 d["event_type"] = "vehicle_count"
             else:
                 d["event_type"] = raw_lower
@@ -225,6 +225,7 @@ class EventResponse(BaseModel):
     area_ratio: Optional[float] = None
     severity_method: Optional[str] = None
     surface_condition: Optional[str] = None
+    ws_session_id: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

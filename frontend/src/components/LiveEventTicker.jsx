@@ -24,8 +24,9 @@ import { formatRelativeTime } from '../utils/dateTime';
 const TYPE_STYLES = {
   pothole:       { bg: 'bg-rose-50',    border: 'border-rose-200',    text: 'text-rose-700',    badge: 'bg-rose-500',    label: 'Pothole',       Icon: AlertTriangle },
   road_defect:   { bg: 'bg-amber-50',   border: 'border-amber-200',   text: 'text-amber-700',   badge: 'bg-amber-500',   label: 'Road Defect',   Icon: AlertTriangle },
-  vehicle_count: { bg: 'bg-blue-50',    border: 'border-blue-200',    text: 'text-blue-700',    badge: 'bg-blue-500',    label: 'Traffic Scan',  Icon: Car },
-  congestion:    { bg: 'bg-orange-50',  border: 'border-orange-200',  text: 'text-orange-700',  badge: 'bg-orange-500',  label: 'Congestion',    Icon: Radio },
+  vehicle_count:    { bg: 'bg-blue-50',    border: 'border-blue-200',    text: 'text-blue-700',    badge: 'bg-blue-500',    label: 'Traffic Scan',  Icon: Car },
+  traffic_snapshot: { bg: 'bg-blue-50',    border: 'border-blue-200',    text: 'text-blue-700',    badge: 'bg-blue-500',    label: 'Traffic Scan',  Icon: Car },
+  congestion:       { bg: 'bg-orange-50',  border: 'border-orange-200',  text: 'text-orange-700',  badge: 'bg-orange-500',  label: 'Congestion',    Icon: Radio },
 };
 
 const SEVERITY_DOT = {

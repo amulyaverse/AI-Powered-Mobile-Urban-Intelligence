@@ -38,8 +38,7 @@ def adapt_traffic_event(event) -> dict:
     event_generator.process_detection() expects (docs/api/event-schema.md).
 
     Mapping notes:
-    - event_type: his pipeline only produces traffic snapshots, so this
-      is always "congestion" -- the closest allowed value in the schema.
+    - event_type: emits "vehicle_count" to match the schema and backend inference engine.
     - severity: his `density` field (LOW/MEDIUM/HIGH/CRITICAL) already
       uses the exact same words as the schema's `severity` field, just
       different case -- so this is a straight .lower(), no judgment call.
@@ -54,7 +53,7 @@ def adapt_traffic_event(event) -> dict:
       them from Pranav's event.
     """
     return {
-        "event_type": "congestion",
+        "event_type": "vehicle_count",
         "confidence": round(event.confidence, 4),
         "severity": event.density.lower(),
         "bus_id": event.bus_id,

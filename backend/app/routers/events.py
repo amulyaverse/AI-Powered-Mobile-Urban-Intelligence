@@ -25,34 +25,14 @@ from app.models.event import Event
 from app.models.bus import Bus
 from app.schemas.event import EventCreate, EventResponse, EventStatusUpdate
 from app.services.hotspot_service import process_event_for_hotspot
+from app.services.bus_service import upsert_bus
 from app.config import get_settings
 
 router = APIRouter(prefix="/api/events", tags=["Events"])
 settings = get_settings()
 
 
-def _upsert_bus(db: Session, event_data: EventCreate, lat: float | None = None, lng: float | None = None) -> None:
-    """
-    Auto-register a bus if it has not been seen before.
-    Updates GPS and traffic level on every event received.
-    """
-    if not event_data.bus_id:
-        return
 
-    bus = db.query(Bus).filter(Bus.id == event_data.bus_id).first()
-    if not bus:
-        bus = Bus(id=event_data.bus_id, route=None)
-        db.add(bus)
-
-    # Map density label to traffic level
-    density_map = {"LOW": "Low", "MEDIUM": "Medium", "HIGH": "High", "CRITICAL": "High"}
-    traffic = density_map.get(event_data.density or "", "Unknown")
-
-    bus.last_lat = lat if lat is not None else event_data.latitude
-    bus.last_lng = lng if lng is not None else event_data.longitude
-    bus.last_traffic = traffic
-    bus.last_seen = datetime.now(timezone.utc)
-    bus.status = "Active"
 
 
 @router.post("", response_model=EventResponse, status_code=201)
@@ -87,7 +67,7 @@ async def ingest_event(payload: EventCreate, db: Session = Depends(get_db)):
                 )
 
     # Auto-register / update bus
-    _upsert_bus(db, payload, lat=event_lat, lng=event_lng)
+    upsert_bus(db, bus_id=payload.bus_id, lat=event_lat, lng=event_lng, density=payload.density)
     db.flush()
 
     assigned_id = payload.event_id or f"EVT_{uuid.uuid4().hex[:8]}"
