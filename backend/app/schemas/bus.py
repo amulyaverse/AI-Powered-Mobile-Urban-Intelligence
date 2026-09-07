@@ -5,9 +5,9 @@ Pydantic schemas for Bus endpoints.
 """
 
 from __future__ import annotations
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, field_serializer
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class BusCreate(BaseModel):
@@ -81,9 +81,16 @@ class BusResponse(BaseModel):
     last_lng: Optional[float]
     last_traffic: str
     last_seen: Optional[datetime]
-    created_at: datetime
-
+    created_at: Optional[datetime] = None
     model_config = {"from_attributes": True}
+
+    @field_serializer("last_seen", "created_at", check_fields=False)
+    def serialize_utc_datetime(self, dt: Optional[datetime]) -> Optional[str]:
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.isoformat()
 
 
 class BusLocationUpdate(BaseModel):

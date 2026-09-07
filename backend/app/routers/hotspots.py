@@ -10,6 +10,7 @@ GET /api/alerts     — system alerts for the Overview dashboard
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.database import get_db
 from app.models.hotspot import Hotspot
@@ -74,7 +75,7 @@ def list_alerts(
     q = db.query(SystemAlert)
     if acknowledged is not None:
         q = q.filter(SystemAlert.acknowledged == acknowledged)
-    return q.order_by(SystemAlert.timestamp.desc()).limit(limit).all()
+    return q.order_by(func.datetime(SystemAlert.timestamp).desc()).limit(limit).all()
 
 
 @router.patch("/api/alerts/{alert_id}/acknowledge", response_model=SystemAlertResponse)

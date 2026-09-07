@@ -26,7 +26,9 @@ import {
   CheckCircle,
   AlertCircle,
   WifiOff,
+  CheckCircle2,
 } from 'lucide-react';
+import { formatDateTime, formatRelativeTime } from '../utils/dateTime';
 import {
   getBuses,
   createBus,
@@ -77,9 +79,7 @@ function trafficBadge(traffic) {
 }
 
 function formatDate(dateStr) {
-  if (!dateStr) return '—';
-  const d = new Date(dateStr);
-  return isValid(d) ? format(d, 'dd MMM yyyy, HH:mm') : '—';
+  return formatDateTime(dateStr, 'dd MMM yyyy, HH:mm:ss');
 }
 
 // ── Toast Component ───────────────────────────────────────────────────────────
@@ -564,8 +564,9 @@ export default function FleetManagement() {
                     <td className={`px-4 py-3 text-xs ${trafficBadge(bus.last_traffic)}`}>
                       {bus.last_traffic || 'Unknown'}
                     </td>
-                    <td className="px-4 py-3 text-xs text-slate-500">
-                      {formatDate(bus.last_seen)}
+                    <td className="px-4 py-3 text-xs">
+                      <div className="font-semibold text-slate-800">{formatDate(bus.last_seen)}</div>
+                      <div className="text-[11px] text-brand-600 font-medium">{formatRelativeTime(bus.last_seen)}</div>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">

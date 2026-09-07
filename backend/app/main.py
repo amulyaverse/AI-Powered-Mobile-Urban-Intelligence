@@ -19,26 +19,33 @@ Visit the interactive API docs at: http://localhost:8000/docs
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.config import get_settings
 from app.database import engine, Base, SessionLocal, get_db, migrate_db
-from app.models import Bus, Event, Hotspot, SystemAlert   # noqa — ensure models are registered
+from app.models import Bus, Event, Hotspot, SystemAlert, WsSession  # noqa — ensure models are registered
 from app.seed import run_seed
-from app.routers import events, buses, analytics, hotspots
+from app.routers import events, buses, analytics, hotspots, videos
+from app.routers import camera_ws, events_ws
 
 settings = get_settings()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Create tables, run migrations, and seed data on startup."""
+    """Create tables, run migrations, seed data, and randomize bus coordinates on startup."""
     Base.metadata.create_all(bind=engine)
     migrate_db(engine)
     db = SessionLocal()
     try:
-        run_seed(db)
+        if settings.AUTO_SEED:
+            run_seed(db)
+        # Randomize target bus coordinates somewhere in Delhi whenever server goes live,
+        # and ensure all detections of that bus are in the 3 km vicinity.
+        from app.services.bus_location_service import randomize_bus_on_startup
+        randomize_bus_on_startup(db, settings.TARGET_BUS_ID, settings.BUS_VICINITY_RADIUS_KM)
     finally:
         db.close()
     yield  # App is running
@@ -68,11 +75,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Routers ───────────────────────────────────────────────────────────────────
+# ── Static Evidence Assets ──────────────────────────────────────────────────
+settings.EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/evidence", StaticFiles(directory=str(settings.EVIDENCE_DIR)), name="evidence")
+
+# ── Routers ─────────────────────────────────────────────────────────────────────
 app.include_router(events.router)
 app.include_router(buses.router)
 app.include_router(analytics.router)
 app.include_router(hotspots.router)
+app.include_router(videos.router)
+
+# ── WebSocket routers ───────────────────────────────────────────────────────────
+app.include_router(camera_ws.router)  # WS /api/ws/camera/{bus_id}
+app.include_router(events_ws.router)  # WS /api/ws/events
 
 
 # ── Health check ──────────────────────────────────────────────────────────────

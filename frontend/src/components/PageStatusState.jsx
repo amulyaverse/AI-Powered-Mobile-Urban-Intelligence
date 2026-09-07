@@ -35,10 +35,7 @@ export function ErrorState({
           </button>
         )}
         <button
-          onClick={() => {
-            setForceDemoMode(true);
-            if (onRetry) onRetry();
-          }}
+          onClick={() => { setForceDemoMode(true); if (onRetry) onRetry(); }}
           className="flex items-center gap-1.5 px-4 py-2 bg-brand-50 border border-brand-300 text-brand-700 rounded-md text-sm font-medium hover:bg-brand-100 transition cursor-pointer"
         >
           <Database className="w-4 h-4" />

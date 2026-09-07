@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { formatDistanceToNow } from 'date-fns';
+import { formatRelativeTime } from '../utils/dateTime';
 import { AlertCircle, AlertTriangle, Info, Check, CheckCheck } from 'lucide-react';
 import { acknowledgeAlert } from '../services/api';
 
@@ -89,7 +89,7 @@ export default function AlertPanel({ alerts: initialAlerts = [], onAcknowledge }
                     {alert.severity}
                   </span>
                   <span className="text-xs text-slate-500 whitespace-nowrap">
-                    {formatDistanceToNow(new Date(alert.timestamp))} ago
+                    {formatRelativeTime(alert.timestamp)}
                   </span>
                 </div>
                 <p className={`font-semibold text-sm mb-1 ${styles.text}`}>{alert.message}</p>

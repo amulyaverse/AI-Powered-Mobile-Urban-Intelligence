@@ -58,6 +58,21 @@ class TestIntegrationCompatibility:
         data = resp.json()
         assert data["event_type"] == "vehicle_count"
 
+    def test_post_congestion_maps_to_vehicle_count(self):
+        """Integration pipeline congestion event_type normalizes to vehicle_count."""
+        payload = {
+            "event_type": "congestion",
+            "confidence": 0.88,
+            "severity": "high",
+            "bus_id": "BUS_021",
+            "latitude": 28.6139,
+            "longitude": 77.2090,
+        }
+        resp = client.post("/api/events", json=payload)
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["event_type"] == "vehicle_count"
+
     def test_post_with_nested_gps_and_vehicle_counts(self):
         """Direct TrafficEvent ingestion with nested gps and vehicle_counts."""
         payload = {

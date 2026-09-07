@@ -41,6 +41,7 @@ class TestBusCRUD:
         assert data["route"] == "Route 100"
         assert data["status"] == "Active"
         assert data["camera_status"] == "Active"
+        assert "created_at" in data
 
     def test_create_bus_duplicate_returns_409(self):
         payload = {"id": "BUS_101", "route": "Route 101"}
