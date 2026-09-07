@@ -249,9 +249,12 @@ async def camera_stream(
                 })
                 continue
 
-            # ── Frame sampler: skip if too soon ──────────────────────────────
+            # ── Frame sampler: dynamic sample interval from configured model FPS ───
+            target_fps = settings.DETECTION_FPS_POTHOLE if mode == "pothole" else settings.DETECTION_FPS_TRAFFIC
+            sample_interval_sec = 1.0 / max(target_fps, 0.1)
+
             now = time.monotonic()
-            if now - last_inference_at < settings.WS_FRAME_SAMPLE_INTERVAL_SEC:
+            if now - last_inference_at < sample_interval_sec:
                 await ws.send_json({
                     "status": "frame_skipped",
                     "frame_index": frames_received,

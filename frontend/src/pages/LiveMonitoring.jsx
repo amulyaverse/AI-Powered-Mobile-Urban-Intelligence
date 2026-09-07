@@ -53,6 +53,13 @@ function filterEventsForBus(events, busId) {
   return events.filter((e) => !e.bus_id || e.bus_id === busId);
 }
 
+// ── Explicit Detection FPS Configuration ──────────────────────────────────────
+// Configurable frame rate per second for edge AI stream inference
+export const DETECTION_FPS_CONFIG = {
+  pothole: 5,   // FPS for Pothole / Road Defect AI (e.g. 5, 8, 10, 15)
+  traffic: 5,   // FPS for Traffic / Vehicle Count AI (e.g. 5, 8, 10, 15)
+};
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function LiveMonitoring() {
   const [buses, setBuses] = useState([]);
@@ -325,7 +332,10 @@ export default function LiveMonitoring() {
         frameCountWindowRef.current = 0;
       }, 1000);
 
-      // 3. Start 2 FPS frame capture loop (every 500 ms)
+      // 3. Start frame capture loop based on explicit configured FPS for the mode
+      const targetFps = DETECTION_FPS_CONFIG[inferenceMode] || 5;
+      const captureIntervalMs = Math.round(1000 / targetFps);
+
       streamIntervalRef.current = setInterval(() => {
         if (!isStreamingRef.current || !videoRef.current || ws.readyState !== WebSocket.OPEN) return;
 
@@ -355,7 +365,7 @@ export default function LiveMonitoring() {
           'image/jpeg',
           0.8
         );
-      }, 500); // 2 FPS
+      }, captureIntervalMs);
     };
 
     ws.onmessage = (event) => {

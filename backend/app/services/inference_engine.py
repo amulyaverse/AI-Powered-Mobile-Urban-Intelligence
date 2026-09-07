@@ -17,6 +17,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Literal, Optional, List
 
+from ultralytics import YOLO
 import numpy as np
 
 from app.config import get_settings
@@ -154,6 +155,31 @@ class InferenceEngine:
         try:
             import os
             from pathlib import Path
+            import torch
+            
+            # Allowlist Ultralytics model classes for PyTorch 2.6+ unpickling
+            try:
+                import ultralytics.nn.tasks
+                if hasattr(torch.serialization, "add_safe_globals"):
+                    torch.serialization.add_safe_globals([
+                        ultralytics.nn.tasks.DetectionModel,
+                        ultralytics.nn.tasks.SegmentationModel,
+                        ultralytics.nn.tasks.ClassificationModel,
+                        ultralytics.nn.tasks.PoseModel,
+                        ultralytics.nn.tasks.OBBModel,
+                        ultralytics.nn.tasks.WorldModel,
+                    ])
+            except Exception:
+                pass
+
+            # Safe monkeypatch for PyTorch 2.6+ weights_only default
+            _orig_load = torch.load
+            def _compat_torch_load(*args, **kwargs):
+                if "weights_only" not in kwargs:
+                    kwargs["weights_only"] = False
+                return _orig_load(*args, **kwargs)
+            torch.load = _compat_torch_load
+
             from ultralytics import YOLO
             weights = (
                 settings.YOLO_TRAFFIC_WEIGHTS
@@ -161,7 +187,6 @@ class InferenceEngine:
                 else settings.YOLO_POTHOLE_WEIGHTS
             )
             # Resolve relative paths against PROJECT_ROOT and convert to CWD-relative path
-            # to avoid path sanitisation issues with special characters (e.g. single quotes).
             if not os.path.exists(weights):
                 from app.config import PROJECT_ROOT
                 candidate = PROJECT_ROOT / weights

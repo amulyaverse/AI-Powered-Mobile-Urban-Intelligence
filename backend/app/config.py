@@ -46,10 +46,12 @@ class Settings(BaseSettings):
     # Events below this confidence are rejected at ingestion time.
     MIN_CONFIDENCE: float = 0.65
 
-    # ── WebSocket Camera Streaming ────────────────────────────────────────────
-    # Inference runs at 2 fps (every 500 ms). Frames arriving faster are
-    # received and acknowledged but skipped for YOLO processing.
-    WS_FRAME_SAMPLE_INTERVAL_SEC: float = 0.5
+    # ── WebSocket Camera Streaming & Detection FPS ────────────────────────────
+    # Explicit FPS target for server-side YOLO inference per model mode.
+    # Can be customized or overridden via .env (e.g. DETECTION_FPS_POTHOLE=10.0)
+    DETECTION_FPS_POTHOLE: float = 5.0   # Default FPS for pothole detection (e.g. 5.0, 10.0)
+    DETECTION_FPS_TRAFFIC: float = 5.0   # Default FPS for traffic detection (e.g. 5.0, 10.0)
+    WS_FRAME_SAMPLE_INTERVAL_SEC: float = 0.2  # Global fallback sample interval
     # Hard cap per incoming frame — reject frames larger than this.
     WS_MAX_FRAME_SIZE_BYTES: int = 512_000  # 500 KB
 
