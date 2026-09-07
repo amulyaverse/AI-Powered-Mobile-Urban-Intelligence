@@ -36,6 +36,7 @@ frontend/dist-ssr/
 npm-debug.log*
 yarn-error.log*
 *.local
+frontend/public/evidence/EVT_*.jpg
 
 # ── ML / AI ──────────────────────────────────────────────────────────────────
 # Large model weights — store in cloud storage, not Git
