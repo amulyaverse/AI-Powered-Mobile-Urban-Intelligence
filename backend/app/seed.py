@@ -187,10 +187,13 @@ def seed_pr37_potholes(db: Session, max_events: int = 50) -> int:
         return existing_pr37_count
 
     # Locate PR 37 jsonl file
-    pr37_dir = Path(__file__).resolve().parents[2] / "edge-ai" / "Pothole_Road_Condition_Model"
+    pr_root = Path(__file__).resolve().parents[2] / "edge-ai"
     jsonl_candidates = [
-        pr37_dir / "detected_events_approach_a-city_side.jsonl",
-        pr37_dir / "detected_events_approach_a.jsonl",
+        pr_root / "pothole-latest" / "Pothole_Road_Condition_Model" / "pothole_events.jsonl",
+        pr_root / "pothole-latest" / "Pothole_Road_Condition_Model" / "test_log.jsonl",
+        pr_root / "Pothole_Road_Condition_Model" / "detected_events_approach_a-city_side.jsonl",
+        pr_root / "Pothole_Road_Condition_Model" / "detected_events_approach_a.jsonl",
+        pr_root / "pothole_Old" / "Pothole_Road_Condition_Model" / "detected_events_approach_a.jsonl",
     ]
 
     selected_file = None
