@@ -54,10 +54,10 @@ function filterEventsForBus(events, busId) {
 }
 
 // ── Explicit Detection FPS Configuration ──────────────────────────────────────
-// Configurable frame rate per second for edge AI stream inference
+// Configurable frame rate per second for edge AI stream inference (controlled 2-5 FPS)
 export const DETECTION_FPS_CONFIG = {
-  pothole: 20,   // FPS for Pothole / Road Defect AI (e.g. 5, 8, 10, 15)
-  traffic: 20,   // FPS for Traffic / Vehicle Count AI (e.g. 5, 8, 10, 15)
+  pothole: 5,   // FPS for Pothole / Road Defect AI (controlled inference rate)
+  traffic: 5,   // FPS for Traffic / Vehicle Count AI (controlled inference rate)
 };
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -102,10 +102,12 @@ export default function LiveMonitoring() {
   const isStreamingRef = useRef(false);
   const lastFrameSentTimeRef = useRef(0);
   // Frame-ID synchronization: monotonically-incrementing counter prepended to
-  // each JPEG blob so the backend can echo it back and we only render bounding
-  // boxes for the frame the response actually corresponds to.
+  // each JPEG blob. Frontend tracks lastRenderedFrameId to accept valid in-flight
+  // frames while discarding out-of-order/stale responses.
   const frameIdRef = useRef(0);
   const lastSentFrameIdRef = useRef(-1);
+  const lastRenderedFrameIdRef = useRef(-1);
+  const isProcessingFrameRef = useRef(false);
 
   // Load sample test videos from PR 37
   useEffect(() => {
@@ -237,6 +239,8 @@ export default function LiveMonitoring() {
   // ── Stop Camera Stream ───────────────────────────────────────────────────────
   const stopCameraStream = useCallback(() => {
     isStreamingRef.current = false;
+    isProcessingFrameRef.current = false;
+    lastRenderedFrameIdRef.current = -1;
     setIsStreaming(false);
     setStreamStatus('Standby');
     setStreamFps(0);
@@ -275,6 +279,10 @@ export default function LiveMonitoring() {
     setLastDetections([]);
     setLastDetectionSummary(null);
     setFramesSent(0);
+    frameIdRef.current = 0;
+    lastSentFrameIdRef.current = -1;
+    lastRenderedFrameIdRef.current = -1;
+    isProcessingFrameRef.current = false;
 
     const busId = selectedBus?.id || 'BUS_021';
     const lat = selectedBus?.last_lat ?? selectedBus?.lat ?? 28.6139;
@@ -347,8 +355,14 @@ export default function LiveMonitoring() {
       streamIntervalRef.current = setInterval(() => {
         if (!isStreamingRef.current || !videoRef.current || ws.readyState !== WebSocket.OPEN) return;
 
+        // Controlled inference loop: throttle capturing next frame if an in-flight frame is still being processed
+        // (with a 1000ms timeout recovery safeguard so network blips never lock the loop)
+        if (isProcessingFrameRef.current && performance.now() - lastFrameSentTimeRef.current < 1000) {
+          return;
+        }
+
         const video = videoRef.current;
-        if (video.videoWidth === 0 || video.videoHeight === 0) return;
+        if (video.videoWidth === 0 || video.videoHeight === 0 || video.paused) return;
 
         // Use the video's native dimensions so the aspect ratio is preserved.
         // Hardcoding 640×480 was stretching 640×360 (16:9) video vertically,
@@ -373,11 +387,10 @@ export default function LiveMonitoring() {
 
         offscreenCanvas.toBlob(
           (blob) => {
-            if (blob && ws.readyState === WebSocket.OPEN) {
-              // Prepend a 4-byte little-endian uint32 frame ID so the backend
-              // can echo it back and we can drop stale overlay updates.
+            if (blob && ws.readyState === WebSocket.OPEN && isStreamingRef.current) {
               const currentFrameId = frameIdRef.current++;
               lastSentFrameIdRef.current = currentFrameId;
+              isProcessingFrameRef.current = true;
               const header = new ArrayBuffer(4);
               new DataView(header).setUint32(0, currentFrameId, /* littleEndian= */ true);
               const combined = new Blob([header, blob], { type: 'application/octet-stream' });
@@ -395,6 +408,7 @@ export default function LiveMonitoring() {
 
     ws.onmessage = (event) => {
       try {
+        isProcessingFrameRef.current = false;
         if (lastFrameSentTimeRef.current > 0) {
           setLatestLatencyMs(Math.round(performance.now() - lastFrameSentTimeRef.current));
         }
@@ -403,14 +417,18 @@ export default function LiveMonitoring() {
         if (data.status === 'frame_skipped') return;
         if (data.status === 'suppressed' && !data.boxes && !data.detections) return;
 
-        // Frame synchronization: only render overlay if this response corresponds
-        // to the most recently sent frame (drops stale detections from prior frames).
+        // Monotonic frame synchronization: discard out-of-order/older responses,
+        // but accept valid in-flight responses for any frame >= last rendered frame.
         if (
           data.frame_id !== undefined &&
           data.frame_id !== null &&
-          data.frame_id !== lastSentFrameIdRef.current
+          data.frame_id < lastRenderedFrameIdRef.current
         ) {
-          return; // Stale response — discard overlay
+          return; // Out-of-order or stale response — discard overlay
+        }
+
+        if (data.frame_id !== undefined && data.frame_id !== null) {
+          lastRenderedFrameIdRef.current = data.frame_id;
         }
 
         if (data.status === 'no_detection') {
@@ -436,12 +454,14 @@ export default function LiveMonitoring() {
     };
 
     ws.onerror = (err) => {
+      isProcessingFrameRef.current = false;
       console.error('[LiveMonitoring] Camera WS error:', err);
       setCameraError('Camera stream connection failed.');
       setStreamStatus('Error');
     };
 
     ws.onclose = () => {
+      isProcessingFrameRef.current = false;
       if (isStreamingRef.current) {
         setStreamStatus('Standby');
         stopCameraStream();
