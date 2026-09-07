@@ -152,12 +152,21 @@ class InferenceEngine:
 
     def _load(self) -> None:
         try:
+            from pathlib import Path
             from ultralytics import YOLO
             weights = (
                 settings.YOLO_TRAFFIC_WEIGHTS
                 if self._mode == "traffic"
                 else settings.YOLO_POTHOLE_WEIGHTS
             )
+            # Resolve relative paths against PROJECT_ROOT so models are found
+            # regardless of which directory uvicorn is started from.
+            weights_path = Path(weights)
+            if not weights_path.is_absolute() and weights_path.suffix in (".pt", ".onnx", ".torchscript"):
+                from app.config import PROJECT_ROOT
+                resolved = PROJECT_ROOT / weights_path
+                if resolved.exists():
+                    weights = str(resolved)
             self._model = YOLO(weights)
         except Exception as exc:
             raise RuntimeError(
