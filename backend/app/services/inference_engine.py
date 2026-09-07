@@ -51,6 +51,67 @@ def _density_to_severity(density: str) -> str:
     return {"LOW": "low", "MEDIUM": "medium", "HIGH": "high", "CRITICAL": "critical"}.get(density, "low")
 
 
+def _fuse_pothole_boxes(
+    boxes: "List[BoundingBox]", distance_threshold: int = 60
+) -> "List[BoundingBox]":
+    """
+    Spatial cluster-fusion — ports ``cluster_boxes()`` from
+    ``edge-ai/pothole-latest/Pothole_Road_Condition_Model/pothole_severity.py``
+    into the backend inference path so Live Monitoring matches the standalone
+    pothole pipeline output.
+
+    Iteratively merges any two BoundingBox objects whose edges are within
+    *distance_threshold* pixels of each other into a single hull box, taking
+    the maximum confidence and preserving the class_name of the first box.
+    """
+    if not boxes:
+        return []
+
+    # Work on mutable dicts, convert back at the end
+    clusters = [
+        {
+            "x1": b.x1, "y1": b.y1, "x2": b.x2, "y2": b.y2,
+            "conf": b.confidence, "class_name": b.class_name,
+            "track_id": b.track_id,
+        }
+        for b in boxes
+    ]
+
+    changed = True
+    while changed:
+        changed = False
+        for i in range(len(clusters)):
+            for j in range(i + 1, len(clusters)):
+                c1, c2 = clusters[i], clusters[j]
+                # Merge if boxes overlap or are within distance_threshold px
+                if not (
+                    c1["x2"] < c2["x1"] - distance_threshold
+                    or c1["x1"] > c2["x2"] + distance_threshold
+                    or c1["y2"] < c2["y1"] - distance_threshold
+                    or c1["y1"] > c2["y2"] + distance_threshold
+                ):
+                    c1["x1"] = min(c1["x1"], c2["x1"])
+                    c1["y1"] = min(c1["y1"], c2["y1"])
+                    c1["x2"] = max(c1["x2"], c2["x2"])
+                    c1["y2"] = max(c1["y2"], c2["y2"])
+                    c1["conf"] = max(c1["conf"], c2["conf"])
+                    clusters.pop(j)
+                    changed = True
+                    break
+            if changed:
+                break
+
+    return [
+        BoundingBox(
+            x1=c["x1"], y1=c["y1"], x2=c["x2"], y2=c["y2"],
+            class_name=c["class_name"],
+            confidence=c["conf"],
+            track_id=c.get("track_id"),
+        )
+        for c in clusters
+    ]
+
+
 @dataclass
 class BoundingBox:
     x1: float
@@ -263,9 +324,17 @@ class InferenceEngine:
     def _parse_pothole(
         self, results, frame_index: int, frame_h: int, frame_w: int
     ) -> Optional[InferenceResult]:
-        """Parse pothole / road_defect detections from a pothole model result."""
-        boxes: List[BoundingBox] = []
-        max_conf = 0.0
+        """Parse pothole / road_defect detections from a pothole model result.
+
+        Two post-processing steps match the standalone pothole-latest pipeline:
+        1. Per-box confidence gate (INFERENCE_CONFIDENCE_POTHOLE) to suppress
+           low-quality predictions that were being displayed in Live Monitoring.
+        2. Spatial cluster fusion (_fuse_pothole_boxes) to merge fragmented /
+           overlapping boxes into a single unified defect boundary per cluster,
+           equivalent to ``cluster_boxes(distance_threshold=60)`` in
+           ``pothole_severity.py``.
+        """
+        raw_boxes: List[BoundingBox] = []
 
         res = results[0]
         if res.boxes is None or len(res.boxes) == 0:
@@ -278,10 +347,17 @@ class InferenceEngine:
         )
         names = res.names
 
+        # Pothole-specific Live Monitoring confidence gate
+        conf_threshold = settings.INFERENCE_CONFIDENCE_POTHOLE
+
         for i, box in enumerate(res.boxes):
             cls_idx = int(box.cls.cpu().item())
             cls_name = names[cls_idx].lower()
             conf = float(box.conf.cpu().item())
+
+            # Discard detections below the pothole-specific threshold
+            if conf < conf_threshold:
+                continue
 
             # Accept the class if it sounds like a road defect
             event_cls = "pothole"
@@ -289,18 +365,21 @@ class InferenceEngine:
                 event_cls = "road_defect"
 
             xyxy = box.xyxy.cpu().tolist()[0]
-            bb = BoundingBox(
+            raw_boxes.append(BoundingBox(
                 x1=xyxy[0], y1=xyxy[1], x2=xyxy[2], y2=xyxy[3],
                 class_name=event_cls,
                 confidence=conf,
                 track_id=track_ids[i],
-            )
-            boxes.append(bb)
-            max_conf = max(max_conf, conf)
+            ))
 
-        if not boxes:
+        if not raw_boxes:
             return None
 
+        # Spatial cluster fusion — fuse fragmented / overlapping boxes (matches
+        # ``cluster_boxes(distance_threshold=60)`` in the standalone pipeline)
+        boxes = _fuse_pothole_boxes(raw_boxes, distance_threshold=60)
+
+        max_conf = max(b.confidence for b in boxes)
         coverage = sum(b.area_ratio(frame_w, frame_h) for b in boxes)
         dominant = max(set(b.class_name for b in boxes), key=lambda c: sum(1 for b in boxes if b.class_name == c))
 

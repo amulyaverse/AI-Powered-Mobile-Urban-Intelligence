@@ -239,12 +239,27 @@ async def camera_stream(
         async for raw_bytes in ws.iter_bytes():
             frames_received += 1
 
+            # ── Frame ID prefix (optional 4-byte little-endian uint32) ───────
+            # The frontend prepends a 4-byte frame ID to every JPEG blob so we
+            # can echo it back in our JSON response for frame synchronization.
+            # Fall back gracefully if no prefix is present (e.g. legacy clients).
+            frame_id: int | None = None
+            jpeg_bytes = raw_bytes
+            if len(raw_bytes) > 4:
+                candidate_id = int.from_bytes(raw_bytes[:4], byteorder="little")
+                # Heuristic: valid JPEG always starts with 0xFF 0xD8 (SOI marker).
+                # If the remaining bytes look like a JPEG we extracted the prefix.
+                if raw_bytes[4:6] == b"\xff\xd8":
+                    frame_id = candidate_id
+                    jpeg_bytes = raw_bytes[4:]
+
             # ── Frame size guard ─────────────────────────────────────────────
-            if len(raw_bytes) > settings.WS_MAX_FRAME_SIZE_BYTES:
+            if len(jpeg_bytes) > settings.WS_MAX_FRAME_SIZE_BYTES:
                 await ws.send_json({
                     "status": "frame_rejected",
                     "reason": "frame_too_large",
                     "frame_index": frames_received,
+                    "frame_id": frame_id,
                     "max_bytes": settings.WS_MAX_FRAME_SIZE_BYTES,
                 })
                 continue
@@ -258,6 +273,7 @@ async def camera_stream(
                 await ws.send_json({
                     "status": "frame_skipped",
                     "frame_index": frames_received,
+                    "frame_id": frame_id,
                 })
                 continue
 
@@ -265,13 +281,14 @@ async def camera_stream(
             frames_inferred += 1
 
             # ── Decode JPEG → BGR ndarray ────────────────────────────────────
-            arr = np.frombuffer(raw_bytes, dtype=np.uint8)
+            arr = np.frombuffer(jpeg_bytes, dtype=np.uint8)
             frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
             if frame is None:
                 await ws.send_json({
                     "status": "frame_rejected",
                     "reason": "invalid_jpeg",
                     "frame_index": frames_received,
+                    "frame_id": frame_id,
                 })
                 continue
 
@@ -284,6 +301,7 @@ async def camera_stream(
                 await ws.send_json({
                     "status": "no_detection",
                     "frame_index": frames_received,
+                    "frame_id": frame_id,
                 })
                 continue
 
@@ -296,6 +314,7 @@ async def camera_stream(
                 live_payload["bus_id"] = bus_id
                 live_payload["latitude"] = base_lat
                 live_payload["longitude"] = base_lng
+                live_payload["frame_id"] = frame_id
                 await ws.send_json(live_payload)
                 continue
 
@@ -327,6 +346,7 @@ async def camera_stream(
                 event_ts = event_ts.replace(tzinfo=timezone.utc)
             payload["timestamp"] = event_ts.isoformat()
             payload["evidence"] = event.evidence
+            payload["frame_id"] = frame_id
 
             await ws.send_json(payload)
 
