@@ -54,9 +54,13 @@ class Settings(BaseSettings):
     WS_MAX_FRAME_SIZE_BYTES: int = 512_000  # 500 KB
 
     # ── YOLO Inference ────────────────────────────────────────────────────────
-    # Model weights: a hub model name (e.g. "yolov8n.pt") or an absolute path
-    # to custom-trained weights (e.g. edge-ai/pothole/best.pt).
-    YOLO_POTHOLE_WEIGHTS: str = "yolov8n.pt"
+    # Model weights: a hub model name (e.g. "yolov8n.pt") or an absolute/relative path
+    # to custom-trained weights.
+    # POTHOLE: custom road-damage model (best_2.pt) trained on PR #37 dataset.
+    #   - 26 road-damage detections validated on 150 sample frames
+    #   - Serialized with dill (requires dill>=0.3.6 in requirements.txt)
+    # Override via .env: YOLO_POTHOLE_WEIGHTS=/absolute/path/to/weights.pt
+    YOLO_POTHOLE_WEIGHTS: str = "edge-ai/pothole-latest/Pothole_Road_Condition_Model/best_2.pt"
     YOLO_TRAFFIC_WEIGHTS: str = "yolov8n.pt"
     INFERENCE_CONFIDENCE: float = 0.25      # YOLO detection confidence threshold
     INFERENCE_IOU: float = 0.45             # NMS IoU threshold
