@@ -152,12 +152,22 @@ class InferenceEngine:
 
     def _load(self) -> None:
         try:
+            import os
+            from pathlib import Path
             from ultralytics import YOLO
             weights = (
                 settings.YOLO_TRAFFIC_WEIGHTS
                 if self._mode == "traffic"
                 else settings.YOLO_POTHOLE_WEIGHTS
             )
+            # Resolve relative paths against PROJECT_ROOT and convert to CWD-relative path
+            # to avoid path sanitisation issues with special characters (e.g. single quotes).
+            if not os.path.exists(weights):
+                from app.config import PROJECT_ROOT
+                candidate = PROJECT_ROOT / weights
+                if candidate.exists():
+                    weights = os.path.relpath(str(candidate), start=os.getcwd())
+
             self._model = YOLO(weights)
         except Exception as exc:
             raise RuntimeError(
@@ -309,13 +319,30 @@ class InferenceEngine:
         h, w = frame.shape[:2]
 
         try:
-            results = self._model.track(
-                frame,
-                persist=True,
-                conf=settings.INFERENCE_CONFIDENCE,
-                iou=settings.INFERENCE_IOU,
-                verbose=False,
-            )
+            if self._mode == "pothole":
+                results = self._model.predict(
+                    frame,
+                    conf=settings.INFERENCE_CONFIDENCE,
+                    iou=settings.INFERENCE_IOU,
+                    verbose=False,
+                )
+            else:
+                try:
+                    results = self._model.track(
+                        frame,
+                        persist=True,
+                        conf=settings.INFERENCE_CONFIDENCE,
+                        iou=settings.INFERENCE_IOU,
+                        verbose=False,
+                    )
+                except Exception:
+                    # Fallback to direct detection if tracker dependency is unavailable
+                    results = self._model.predict(
+                        frame,
+                        conf=settings.INFERENCE_CONFIDENCE,
+                        iou=settings.INFERENCE_IOU,
+                        verbose=False,
+                    )
         except Exception as exc:
             print(f"[InferenceEngine] YOLO inference error: {exc}")
             return None

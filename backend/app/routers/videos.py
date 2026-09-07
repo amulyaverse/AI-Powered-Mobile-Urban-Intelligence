@@ -90,6 +90,10 @@ def stream_sample_video(filename: str, request: Request):
                 "Accept-Ranges": "bytes",
                 "Content-Length": str(file_size),
                 "Content-Type": "video/mp4",
+                # Allow cross-origin canvas operations (video.crossOrigin = 'anonymous')
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
             },
         )
 
@@ -150,6 +154,10 @@ def stream_sample_video(filename: str, request: Request):
         "Accept-Ranges": "bytes",
         "Content-Length": str(content_length),
         "Content-Type": "video/mp4",
+        # Allow cross-origin canvas operations (video.crossOrigin = 'anonymous')
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "*",
     }
 
     return StreamingResponse(
