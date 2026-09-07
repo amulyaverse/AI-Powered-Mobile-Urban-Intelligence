@@ -108,6 +108,7 @@ export default function LiveMonitoring() {
   const lastSentFrameIdRef = useRef(-1);
   const lastRenderedFrameIdRef = useRef(-1);
   const isProcessingFrameRef = useRef(false);
+  const lastDetectionsRef = useRef([]);
 
   // Load sample test videos from PR 37
   useEffect(() => {
@@ -173,7 +174,7 @@ export default function LiveMonitoring() {
     const ctx = canvasEl.getContext('2d');
     if (!ctx) return;
 
-    // Match canvas display size to video display size
+    // Match canvas display size to video container display size
     const rect = videoEl.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
 
@@ -183,12 +184,37 @@ export default function LiveMonitoring() {
 
     if (!detections || detections.length === 0) return;
 
-    // Inferences were performed on the native video frame dimensions (not 640×480).
-    // Use the video element's actual pixel size so boxes are not stretched.
-    const capW = videoEl.videoWidth || 640;
-    const capH = videoEl.videoHeight || 360;
-    const scaleX = canvasEl.width / capW;
-    const scaleY = canvasEl.height / capH;
+    // Inferences were performed on native video frame dimensions (e.g. 640x360).
+    // The <video> element uses object-fit: contain, which produces letterbox (top/bottom)
+    // or pillarbox (left/right) margins when the container aspect ratio differs from the video.
+    const videoWidth = videoEl.videoWidth || 640;
+    const videoHeight = videoEl.videoHeight || 360;
+    const videoAspect = videoWidth / videoHeight;
+    const elementWidth = rect.width;
+    const elementHeight = rect.height;
+    const containerAspect = elementWidth / elementHeight;
+
+    let renderedWidth = elementWidth;
+    let renderedHeight = elementHeight;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (containerAspect > videoAspect) {
+      // Container is wider than the video -> pillarboxed (black bars on left & right)
+      renderedHeight = elementHeight;
+      renderedWidth = elementHeight * videoAspect;
+      offsetX = (elementWidth - renderedWidth) / 2;
+      offsetY = 0;
+    } else {
+      // Container is taller than the video -> letterboxed (black bars on top & bottom)
+      renderedWidth = elementWidth;
+      renderedHeight = elementWidth / videoAspect;
+      offsetX = 0;
+      offsetY = (elementHeight - renderedHeight) / 2;
+    }
+
+    const scaleX = renderedWidth / videoWidth;
+    const scaleY = renderedHeight / videoHeight;
 
     detections.forEach((det) => {
       let bx1 = 0, by1 = 0, bx2 = 0, by2 = 0;
@@ -202,10 +228,17 @@ export default function LiveMonitoring() {
         [bx1, by1, bx2, by2] = det;
       }
 
-      const x = bx1 * scaleX;
-      const y = by1 * scaleY;
-      const w = Math.max(12, (bx2 - bx1) * scaleX);
-      const h = Math.max(12, (by2 - by1) * scaleY);
+      // Clamp native YOLO coordinates to frame bounds to prevent margin overflow
+      const clampedX1 = Math.max(0, Math.min(videoWidth, bx1));
+      const clampedY1 = Math.max(0, Math.min(videoHeight, by1));
+      const clampedX2 = Math.max(0, Math.min(videoWidth, bx2));
+      const clampedY2 = Math.max(0, Math.min(videoHeight, by2));
+
+      // Map from native video pixel space to actual visible screen pixels
+      const x = offsetX + (clampedX1 * scaleX);
+      const y = offsetY + (clampedY1 * scaleY);
+      const w = Math.max(8, (clampedX2 - clampedX1) * scaleX);
+      const h = Math.max(8, (clampedY2 - clampedY1) * scaleY);
 
       const cls = (det.class || det.label || det.type || 'pothole').toLowerCase();
       const conf = det.conf != null ? Math.round(det.conf * 100) : (det.confidence != null ? Math.round(det.confidence * 100) : null);
@@ -227,20 +260,34 @@ export default function LiveMonitoring() {
       ctx.font = 'bold 11px sans-serif';
       const textWidth = ctx.measureText(label).width;
       const badgeHeight = 18;
+      const badgeX = Math.max(offsetX, Math.min(offsetX + renderedWidth - textWidth - 8, x));
+      const badgeY = y >= offsetY + badgeHeight ? y - badgeHeight : y;
 
       ctx.fillStyle = bgColor;
-      ctx.fillRect(x, Math.max(0, y - badgeHeight), textWidth + 8, badgeHeight);
+      ctx.fillRect(badgeX, badgeY, textWidth + 8, badgeHeight);
 
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(label, x + 4, Math.max(12, y - 4));
+      ctx.fillText(label, badgeX + 4, badgeY + 13);
     });
   }, []);
+
+  // Redraw boxes on window resize to ensure alignment is maintained across viewport changes
+  useEffect(() => {
+    const handleResize = () => {
+      if (isStreamingRef.current && videoRef.current && canvasRef.current && lastDetectionsRef.current.length > 0) {
+        drawBoxes(lastDetectionsRef.current, videoRef.current, canvasRef.current);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [drawBoxes]);
 
   // ── Stop Camera Stream ───────────────────────────────────────────────────────
   const stopCameraStream = useCallback(() => {
     isStreamingRef.current = false;
     isProcessingFrameRef.current = false;
     lastRenderedFrameIdRef.current = -1;
+    lastDetectionsRef.current = [];
     setIsStreaming(false);
     setStreamStatus('Standby');
     setStreamFps(0);
@@ -283,6 +330,7 @@ export default function LiveMonitoring() {
     lastSentFrameIdRef.current = -1;
     lastRenderedFrameIdRef.current = -1;
     isProcessingFrameRef.current = false;
+    lastDetectionsRef.current = [];
 
     const busId = selectedBus?.id || 'BUS_021';
     const lat = selectedBus?.last_lat ?? selectedBus?.lat ?? 28.6139;
@@ -432,6 +480,7 @@ export default function LiveMonitoring() {
         }
 
         if (data.status === 'no_detection') {
+          lastDetectionsRef.current = [];
           setLastDetections([]);
           setLastDetectionSummary({ status: 'clear', message: '0 detections (Clear)' });
           if (canvasRef.current && videoRef.current) {
@@ -442,6 +491,7 @@ export default function LiveMonitoring() {
 
         // Detections returned
         const boxes = data.detections || data.boxes || [];
+        lastDetectionsRef.current = boxes;
         setLastDetections(boxes);
         setLastDetectionSummary(data);
 
