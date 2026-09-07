@@ -8,6 +8,7 @@ import {
   Activity,
   Settings,
   Bus,
+  Truck,
   X,
   Shield,
   Server,
@@ -17,7 +18,9 @@ import {
   Database,
   Wifi,
   WifiOff,
+  Clock,
 } from 'lucide-react';
+import { format } from 'date-fns';
 import {
   getConnectionState,
   subscribeConnectionState,
@@ -29,6 +32,7 @@ import {
 const navItems = [
   { path: '/', label: 'Overview', icon: LayoutDashboard },
   { path: '/live', label: 'Live Monitoring', icon: RadioReceiver },
+  { path: '/fleet', label: 'Fleet Management', icon: Truck },
   { path: '/events', label: 'Incidents & Events', icon: AlertTriangle },
   { path: '/map', label: 'GIS Map', icon: Map },
   { path: '/traffic', label: 'Traffic Analytics', icon: Activity },
@@ -41,10 +45,15 @@ export default function MainLayout() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [connState, setConnState] = useState(getConnectionState());
   const [isChecking, setIsChecking] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
     const unsub = subscribeConnectionState(setConnState);
-    return unsub;
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => {
+      unsub();
+      clearInterval(timer);
+    };
   }, []);
 
   const handleManualHealthCheck = async () => {
@@ -56,32 +65,32 @@ export default function MainLayout() {
   const getStatusBadge = () => {
     if (connState.status === 'connected') {
       return (
-        <div
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs"
-          title={`Connected to ${connState.baseUrl}`}
-        >
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs" title={`Connected to ${connState.baseUrl}`}>
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           <span>LIVE DATA</span>
         </div>
       );
     }
     if (connState.status === 'offline_fallback') {
       return (
-        <div
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs"
-          title={`Backend offline (${connState.errorMessage || connState.baseUrl}) — Showing Demo Data`}
-        >
-          <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs" title="Backend offline — showing fallback demo data">
+          <span className="w-2 h-2 rounded-full bg-amber-500" />
           <span>DEMO DATA (OFFLINE)</span>
+          <button
+            type="button"
+            onClick={handleManualHealthCheck}
+            disabled={isChecking}
+            className="ml-1 text-[11px] underline text-amber-900 hover:text-amber-950 font-medium cursor-pointer"
+            title="Attempt reconnect to backend"
+          >
+            {isChecking ? 'Checking...' : 'Reconnect'}
+          </button>
         </div>
       );
     }
     return (
-      <div
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-300 shadow-2xs"
-        title="Running in Demo Mode with Mock Data"
-      >
-        <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-300 shadow-2xs" title="Running in Demo Mode with Mock Data">
+        <span className="w-2 h-2 rounded-full bg-slate-400" />
         <span>DEMO MODE</span>
       </div>
     );
@@ -101,10 +110,9 @@ export default function MainLayout() {
               key={item.path}
               to={item.path}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${
-                  isActive
-                    ? 'bg-brand-600 text-white'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                `flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${isActive
+                  ? 'bg-brand-600 text-white'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
                 }`
               }
             >
@@ -128,6 +136,10 @@ export default function MainLayout() {
             {getStatusBadge()}
           </div>
           <div className="flex items-center gap-4">
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-slate-100/90 rounded-md border border-slate-200 text-xs font-mono text-slate-700 shadow-2xs">
+              <Clock className="w-3.5 h-3.5 text-brand-600 animate-pulse" />
+              <span className="font-semibold">{format(currentTime, 'EEE, dd MMM yyyy • HH:mm:ss')}</span>
+            </div>
             <button
               onClick={() => setIsSettingsOpen(true)}
               className="text-slate-500 hover:text-slate-800 transition p-1.5 rounded-md hover:bg-slate-100 cursor-pointer"
@@ -191,10 +203,12 @@ export default function MainLayout() {
                       <span className="text-emerald-700 font-semibold flex items-center gap-1">
                         <Wifi className="w-3.5 h-3.5 text-emerald-600" /> Live Backend Online
                       </span>
-                    ) : (
+                    ) : connState.status === 'offline_fallback' ? (
                       <span className="text-amber-700 font-semibold flex items-center gap-1">
                         <WifiOff className="w-3.5 h-3.5 text-amber-600" /> Offline — Using Demo Fallback
                       </span>
+                    ) : (
+                      <span className="text-slate-500 font-semibold">Checking…</span>
                     )}
                   </div>
                 </div>
@@ -210,21 +224,15 @@ export default function MainLayout() {
                   <div className="flex gap-1 text-xs">
                     <button
                       onClick={() => setForceDemoMode(false)}
-                      className={`px-2.5 py-1 rounded font-medium transition cursor-pointer ${
-                        connState.mode === 'live'
-                          ? 'bg-slate-900 text-white'
-                          : 'bg-white text-slate-600 border border-slate-200'
-                      }`}
+                      className={`px-2.5 py-1 rounded font-medium transition cursor-pointer ${connState.mode === 'live' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200'
+                        }`}
                     >
                       Live API
                     </button>
                     <button
                       onClick={() => setForceDemoMode(true)}
-                      className={`px-2.5 py-1 rounded font-medium transition cursor-pointer ${
-                        connState.mode === 'demo'
-                          ? 'bg-brand-600 text-white'
-                          : 'bg-white text-slate-600 border border-slate-200'
-                      }`}
+                      className={`px-2.5 py-1 rounded font-medium transition cursor-pointer ${connState.mode === 'demo' ? 'bg-brand-600 text-white' : 'bg-white text-slate-600 border border-slate-200'
+                        }`}
                     >
                       Demo Data
                     </button>

@@ -7,6 +7,7 @@ import EventPage from './pages/EventPage';
 import GISMapPage from './pages/GISMapPage';
 import TrafficAnalytics from './pages/TrafficAnalytics';
 import RoadAnalytics from './pages/RoadAnalytics';
+import FleetManagement from './pages/FleetManagement';
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
         <Route path="/" element={<MainLayout />}>
           <Route index element={<Overview />} />
           <Route path="live" element={<LiveMonitoring />} />
+          <Route path="fleet" element={<FleetManagement />} />
           <Route path="events" element={<EventPage />} />
           <Route path="map" element={<GISMapPage />} />
           <Route path="traffic" element={<TrafficAnalytics />} />

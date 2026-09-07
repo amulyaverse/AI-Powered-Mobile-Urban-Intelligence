@@ -37,10 +37,11 @@ def adapt_traffic_event(event) -> dict:
     Convert Pranav's TrafficEvent dataclass into the dict shape that
     event_generator.process_detection() expects (docs/api/event-schema.md).
 
-    Mapping notes:
+        Mapping notes:
     - event_type: "vehicle_count" (not "congestion") -- this is what
       unlocks car_count/bike_count/density fields on Arjun's backend
-      schema, since those are only populated for vehicle_count events.
+      schema and inference engine, since those are only populated for
+      vehicle_count events.
     - severity: his `density` field (LOW/MEDIUM/HIGH/CRITICAL) already
       uses the exact same words as the schema's `severity` field, just
       different case -- so this is a straight .lower(), no judgment call.

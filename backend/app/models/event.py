@@ -41,8 +41,16 @@ class Event(Base):
     total_vehicles = Column(Integer, nullable=True)
     density = Column(String(20), nullable=True)        # LOW | MEDIUM | HIGH | CRITICAL
     density_score = Column(Float, nullable=True)       # 0.0 – 1.0
-    source_frame = Column(Integer, nullable=True)      # frame index from edge-AI pipeline
-    frame_coverage_ratio = Column(Float, nullable=True) # fraction of frame area covered
+    source_frame = Column(Integer, nullable=True)       # frame index from edge-AI pipeline
+    frame_coverage_ratio = Column(Float, nullable=True)  # fraction of frame area covered
+    ws_session_id = Column(String(40), nullable=True)    # WsSession.id that produced this event
+
+    # PR 37 & 40: Road defect / pothole telemetry fields
+    bbox = Column(Text, nullable=True)                  # JSON string [x1, y1, x2, y2]
+    width_ratio = Column(Float, nullable=True)          # box width relative to frame width (Approach A)
+    area_ratio = Column(Float, nullable=True)           # box area relative to frame area
+    severity_method = Column(String(30), nullable=True) # width_heuristic | perspective_scaling | area_ratio
+    surface_condition = Column(String(50), nullable=True) # pothole | severe_crack | road_defect
 
     # Relationships
     bus = relationship("Bus", back_populates="events")

@@ -54,7 +54,7 @@ def get_summary(db: Session = Depends(get_db)):
 
     potholes_detected = (
         db.query(func.count(Event.event_id))
-        .filter(Event.event_type == "pothole")
+        .filter(Event.event_type.in_(["pothole", "road_defect"]))
         .filter(Event.timestamp >= today_start)
         .scalar() or 0
     )
@@ -107,7 +107,7 @@ def get_traffic_analytics(
 
     traffic_events = (
         db.query(Event)
-        .filter(Event.event_type.in_(["vehicle_count", "traffic_snapshot"]))
+        .filter(Event.event_type.in_(["vehicle_count", "traffic_snapshot", "congestion"]))
         .filter(Event.timestamp >= since)
         .order_by(Event.timestamp)
         .all()
@@ -117,7 +117,7 @@ def get_traffic_analytics(
     if not traffic_events:
         traffic_events = (
             db.query(Event)
-            .filter(Event.event_type.in_(["vehicle_count", "traffic_snapshot"]))
+            .filter(Event.event_type.in_(["vehicle_count", "traffic_snapshot", "congestion"]))
             .order_by(Event.timestamp.desc())
             .limit(120)
             .all()
@@ -255,7 +255,7 @@ def get_traffic_summary(db: Session = Depends(get_db)):
     """
     traffic_events = (
         db.query(Event)
-        .filter(Event.event_type == "vehicle_count")
+        .filter(Event.event_type.in_(["vehicle_count", "traffic_snapshot", "congestion"]))
         .all()
     )
 
@@ -312,7 +312,7 @@ def get_road_summary(db: Session = Depends(get_db)):
 
     total_potholes = (
         db.query(func.count(Event.event_id))
-        .filter(Event.event_type == "pothole")
+        .filter(Event.event_type.in_(road_types))
         .scalar() or 0
     )
 

@@ -270,3 +270,28 @@ class TestAlertAcknowledge:
         assert ack_res.json()["acknowledged"] is True
 
 
+class TestEventRealtimeBroadcast:
+    def test_post_event_broadcasts_over_websocket(self):
+        """Verify that ingesting an event via POST /api/events pushes to WS /api/ws/events subscribers."""
+        with client.websocket_connect("/api/ws/events") as ws:
+            payload = {
+                "event_id": "EVT_WS_TEST_1",
+                "event_type": "pothole",
+                "confidence": 0.90,
+                "severity": "high",
+                "bus_id": "BUS_WS_1",
+                "camera_id": "CAM_FRONT",
+                "latitude": 28.5639,
+                "longitude": 77.2090,
+                "timestamp": "2026-09-03T11:00:00Z",
+            }
+            res = client.post("/api/events", json=payload)
+            assert res.status_code == 201
+
+            msg = ws.receive_json()
+            assert msg["event_id"] == "EVT_WS_TEST_1"
+            assert msg["event_type"] == "pothole"
+            assert msg["bus_id"] == "BUS_WS_1"
+
+
+

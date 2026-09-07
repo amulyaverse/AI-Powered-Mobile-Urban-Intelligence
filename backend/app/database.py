@@ -49,7 +49,10 @@ def migrate_db(eng):
     Ensures newly added columns exist without requiring manual migration steps.
     """
     from sqlalchemy import inspect, text
+    from app.models.ws_session import WsSession  # noqa — ensure table is known
     inspector = inspect(eng)
+
+    # ── events table column additions ─────────────────────────────────────────
     if "events" in inspector.get_table_names():
         columns = {col["name"] for col in inspector.get_columns("events")}
         with eng.connect() as conn:
@@ -57,5 +60,30 @@ def migrate_db(eng):
                 conn.execute(text("ALTER TABLE events ADD COLUMN source_frame INTEGER"))
             if "frame_coverage_ratio" not in columns:
                 conn.execute(text("ALTER TABLE events ADD COLUMN frame_coverage_ratio FLOAT"))
+            if "ws_session_id" not in columns:
+                conn.execute(text("ALTER TABLE events ADD COLUMN ws_session_id TEXT"))
+            # PR 37 & 40 pothole / road defect columns
+            if "bbox" not in columns:
+                conn.execute(text("ALTER TABLE events ADD COLUMN bbox TEXT"))
+            if "width_ratio" not in columns:
+                conn.execute(text("ALTER TABLE events ADD COLUMN width_ratio FLOAT"))
+            if "area_ratio" not in columns:
+                conn.execute(text("ALTER TABLE events ADD COLUMN area_ratio FLOAT"))
+            if "severity_method" not in columns:
+                conn.execute(text("ALTER TABLE events ADD COLUMN severity_method VARCHAR(30)"))
+            if "surface_condition" not in columns:
+                conn.execute(text("ALTER TABLE events ADD COLUMN surface_condition VARCHAR(50)"))
             conn.commit()
+
+        # Normalize legacy ISO timestamps with 'T' in SQLite
+        if settings.DATABASE_URL.startswith("sqlite"):
+            with eng.connect() as conn:
+                conn.execute(text("UPDATE events SET timestamp = strftime('%Y-%m-%d %H:%M:%S', timestamp) WHERE timestamp LIKE '%T%'"))
+                conn.commit()
+
+    # ── ws_sessions table (created automatically by Base.metadata.create_all,
+    #    but guard here for databases that were initialised before this table
+    #    was added to the model registry) ──────────────────────────────────────
+    if "ws_sessions" not in inspector.get_table_names():
+        WsSession.__table__.create(eng)
 
