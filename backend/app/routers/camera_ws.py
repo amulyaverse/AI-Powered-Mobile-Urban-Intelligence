@@ -49,6 +49,17 @@ settings = get_settings()
 # ── DB dependency (sync, used via thread executor) ────────────────────────────
 
 def _get_db() -> Session:
+    from app.database import get_db
+    try:
+        from app.main import app
+        if get_db in app.dependency_overrides:
+            override = app.dependency_overrides[get_db]
+            res = override()
+            if hasattr(res, "__next__"):
+                return next(res)
+            return res
+    except Exception:
+        pass
     return SessionLocal()
 
 
