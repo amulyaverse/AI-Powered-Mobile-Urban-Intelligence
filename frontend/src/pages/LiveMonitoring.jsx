@@ -56,8 +56,8 @@ function filterEventsForBus(events, busId) {
 // ── Explicit Detection FPS Configuration ──────────────────────────────────────
 // Configurable frame rate per second for edge AI stream inference
 export const DETECTION_FPS_CONFIG = {
-  pothole: 5,   // FPS for Pothole / Road Defect AI (e.g. 5, 8, 10, 15)
-  traffic: 5,   // FPS for Traffic / Vehicle Count AI (e.g. 5, 8, 10, 15)
+  pothole: 20,   // FPS for Pothole / Road Defect AI (e.g. 5, 8, 10, 15)
+  traffic: 20,   // FPS for Traffic / Vehicle Count AI (e.g. 5, 8, 10, 15)
 };
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -101,6 +101,11 @@ export default function LiveMonitoring() {
   const fpsIntervalRef = useRef(null);
   const isStreamingRef = useRef(false);
   const lastFrameSentTimeRef = useRef(0);
+  // Frame-ID synchronization: monotonically-incrementing counter prepended to
+  // each JPEG blob so the backend can echo it back and we only render bounding
+  // boxes for the frame the response actually corresponds to.
+  const frameIdRef = useRef(0);
+  const lastSentFrameIdRef = useRef(-1);
 
   // Load sample test videos from PR 37
   useEffect(() => {
@@ -176,9 +181,12 @@ export default function LiveMonitoring() {
 
     if (!detections || detections.length === 0) return;
 
-    // Inferences were performed on standard 640x480 frame
-    const scaleX = canvasEl.width / 640;
-    const scaleY = canvasEl.height / 480;
+    // Inferences were performed on the native video frame dimensions (not 640×480).
+    // Use the video element's actual pixel size so boxes are not stretched.
+    const capW = videoEl.videoWidth || 640;
+    const capH = videoEl.videoHeight || 360;
+    const scaleX = canvasEl.width / capW;
+    const scaleY = canvasEl.height / capH;
 
     detections.forEach((det) => {
       let bx1 = 0, by1 = 0, bx2 = 0, by2 = 0;
@@ -342,22 +350,39 @@ export default function LiveMonitoring() {
         const video = videoRef.current;
         if (video.videoWidth === 0 || video.videoHeight === 0) return;
 
-        // Draw frame onto offscreen canvas (640x480)
+        // Use the video's native dimensions so the aspect ratio is preserved.
+        // Hardcoding 640×480 was stretching 640×360 (16:9) video vertically,
+        // which suppressed lower-half pothole detections.
+        const capW = video.videoWidth || 640;
+        const capH = video.videoHeight || 360;
+
+        // Draw frame onto offscreen canvas at native capture resolution
         let offscreenCanvas = hiddenCanvasRef.current;
-        if (!offscreenCanvas) {
+        if (
+          !offscreenCanvas ||
+          offscreenCanvas.width !== capW ||
+          offscreenCanvas.height !== capH
+        ) {
           offscreenCanvas = document.createElement('canvas');
-          offscreenCanvas.width = 640;
-          offscreenCanvas.height = 480;
+          offscreenCanvas.width = capW;
+          offscreenCanvas.height = capH;
           hiddenCanvasRef.current = offscreenCanvas;
         }
         const ctx = offscreenCanvas.getContext('2d');
-        ctx.drawImage(video, 0, 0, 640, 480);
+        ctx.drawImage(video, 0, 0, capW, capH);
 
         offscreenCanvas.toBlob(
           (blob) => {
             if (blob && ws.readyState === WebSocket.OPEN) {
+              // Prepend a 4-byte little-endian uint32 frame ID so the backend
+              // can echo it back and we can drop stale overlay updates.
+              const currentFrameId = frameIdRef.current++;
+              lastSentFrameIdRef.current = currentFrameId;
+              const header = new ArrayBuffer(4);
+              new DataView(header).setUint32(0, currentFrameId, /* littleEndian= */ true);
+              const combined = new Blob([header, blob], { type: 'application/octet-stream' });
               lastFrameSentTimeRef.current = performance.now();
-              ws.send(blob);
+              ws.send(combined);
               frameCountWindowRef.current += 1;
               setFramesSent((prev) => prev + 1);
             }
@@ -377,6 +402,16 @@ export default function LiveMonitoring() {
         const data = JSON.parse(event.data);
         if (data.status === 'frame_skipped') return;
         if (data.status === 'suppressed' && !data.boxes && !data.detections) return;
+
+        // Frame synchronization: only render overlay if this response corresponds
+        // to the most recently sent frame (drops stale detections from prior frames).
+        if (
+          data.frame_id !== undefined &&
+          data.frame_id !== null &&
+          data.frame_id !== lastSentFrameIdRef.current
+        ) {
+          return; // Stale response — discard overlay
+        }
 
         if (data.status === 'no_detection') {
           setLastDetections([]);
