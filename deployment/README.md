@@ -46,7 +46,9 @@ Oracle Cloud ARM64 Always-Free VM (Ubuntu 24.04 LTS / aarch64)
 
 ---
 
-## 3. Automated One-Command Provisioning
+## 3. Prerequisites & Automated Provisioning
+
+> **PREREQUISITE**: Ensure **PR #52** (`deployment/oracle-arm64`) is merged into `main` before running the automated provisioning script, as `setup_oracle_vm.sh` automatically clones and deploys the latest code from the `main` branch.
 
 1. **Connect to your Oracle VM**:
    ```bash
@@ -60,6 +62,8 @@ Oracle Cloud ARM64 Always-Free VM (Ubuntu 24.04 LTS / aarch64)
    chmod +x setup_oracle_vm.sh
    ./setup_oracle_vm.sh
    ```
+
+   *(Note: The script is fully idempotent. Re-running it will update application code, preserve existing PostgreSQL database credentials and `.env` configuration, and restart services cleanly).*
 
 ---
 
@@ -104,7 +108,11 @@ sudo journalctl -u urban-intelligence -f
 
 ## 6. End-to-End Verification
 
-Run the automated verification suite from your local machine or from within the VM:
+Run the automated verification suite against your live deployed domain:
 ```bash
 python3 deployment/verify_deployment.py --url https://api.yourdomain.com
 ```
+
+*Options:*
+- `--url`: Base URL of the deployed backend (e.g., `https://api.yourdomain.com` or `http://127.0.0.1:8000`). Default: `http://127.0.0.1:8000`.
+- `--insecure`: Opt-in flag to bypass TLS certificate verification (useful only for local development or self-signed test certificates). Default is strict verification.

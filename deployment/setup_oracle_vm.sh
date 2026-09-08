@@ -7,22 +7,55 @@
 
 set -euo pipefail
 
+APP_DIR="/opt/AI-Powered-Mobile-Urban-Intelligence"
+ENV_FILE="${APP_DIR}/backend/.env"
+DB_NAME="urban_intelligence"
+DB_USER="urban_app"
+
 echo '=== [1/8] Updating System & Installing Core Dependencies ==='
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y     python3     python3-pip     python3-venv     python3-dev     git     curl     build-essential     libpq-dev     ffmpeg     libsm6     libxext6     libgl1     libglib2.0-0     ufw
+sudo apt install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    python3-dev \
+    git \
+    curl \
+    build-essential \
+    libpq-dev \
+    ffmpeg \
+    libsm6 \
+    libxext6 \
+    libgl1 \
+    libglib2.0-0 \
+    ufw
 
 echo '=== [2/8] Installing & Configuring PostgreSQL (Private 127.0.0.1) ==='
 sudo apt install -y postgresql postgresql-contrib
 sudo systemctl enable --now postgresql
 
-DB_NAME="urban_intelligence"
-DB_USER="urban_app"
-DB_PASS="$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 20)"
+# Idempotently check if user and database already exist
+USER_EXISTS=$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}';" 2>/dev/null || echo "0")
+DB_EXISTS=$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}';" 2>/dev/null || echo "0")
 
-sudo -u postgres psql -c "CREATE DATABASE ${DB_NAME};" || true
-sudo -u postgres psql -c "CREATE USER ${DB_USER} WITH ENCRYPTED PASSWORD '${DB_PASS}';" || true
-sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};" || true
-sudo -u postgres psql -d ${DB_NAME} -c "GRANT ALL ON SCHEMA public TO ${DB_USER};" || true
+if [ "${USER_EXISTS}" = "1" ]; then
+    echo "PostgreSQL user '${DB_USER}' already exists. Preserving existing database credentials."
+    DB_PASS=""
+else
+    echo "Creating PostgreSQL user '${DB_USER}'..."
+    DB_PASS="$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 20)"
+    sudo -u postgres psql -c "CREATE USER ${DB_USER} WITH ENCRYPTED PASSWORD '${DB_PASS}';"
+fi
+
+if [ "${DB_EXISTS}" = "1" ]; then
+    echo "PostgreSQL database '${DB_NAME}' already exists."
+else
+    echo "Creating PostgreSQL database '${DB_NAME}'..."
+    sudo -u postgres psql -c "CREATE DATABASE ${DB_NAME} OWNER ${DB_USER};"
+fi
+
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};" >/dev/null 2>&1 || true
+sudo -u postgres psql -d ${DB_NAME} -c "GRANT ALL ON SCHEMA public TO ${DB_USER};" >/dev/null 2>&1 || true
 
 echo '=== [3/8] Installing Caddy Web Server (Automated HTTPS Reverse Proxy) ==='
 sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
@@ -32,7 +65,6 @@ sudo apt update
 sudo apt install -y caddy
 
 echo '=== [4/8] Setting Up Application Directory & Virtual Environment ==='
-APP_DIR="/opt/AI-Powered-Mobile-Urban-Intelligence"
 if [ ! -d "${APP_DIR}" ]; then
     sudo git clone https://github.com/amulyaverse/AI-Powered-Mobile-Urban-Intelligence.git "${APP_DIR}"
     sudo chown -R ubuntu:ubuntu "${APP_DIR}"
@@ -53,9 +85,15 @@ pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
 
 echo '=== [5/8] Creating Production Environment Configuration ==='
-ENV_FILE="${APP_DIR}/backend/.env"
-if [ ! -f "${ENV_FILE}" ]; then
-    cat <<EOF > "${ENV_FILE}"
+if [ -f "${ENV_FILE}" ]; then
+    echo "Existing production .env found at ${ENV_FILE}. Preserving existing configuration."
+else
+    if [ -z "${DB_PASS}" ]; then
+        # In case user existed before script ran but .env was missing, generate a new password and set it
+        DB_PASS="$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 20)"
+        sudo -u postgres psql -c "ALTER USER ${DB_USER} WITH ENCRYPTED PASSWORD '${DB_PASS}';"
+    fi
+    cat <<ENVEOF > "${ENV_FILE}"
 DATABASE_URL=postgresql://${DB_USER}:${DB_PASS}@127.0.0.1:5432/${DB_NAME}
 DEBUG=false
 AUTO_SEED=true
@@ -68,9 +106,9 @@ INFERENCE_CONFIDENCE_POTHOLE=0.45
 INFERENCE_IOU=0.45
 YOLO_POTHOLE_WEIGHTS=edge-ai/pothole-latest/Pothole_Road_Condition_Model/best_2.pt
 YOLO_TRAFFIC_WEIGHTS=yolov8n.pt
-EOF
+ENVEOF
     chmod 600 "${ENV_FILE}"
-    echo "Created production .env file."
+    echo "Created production .env file (permissions: 0600, secrets masked)."
 fi
 
 echo '=== [6/8] Installing & Starting Systemd Service ==='
