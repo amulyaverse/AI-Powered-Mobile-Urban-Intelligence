@@ -46,10 +46,12 @@ class Settings(BaseSettings):
     # Events below this confidence are rejected at ingestion time.
     MIN_CONFIDENCE: float = 0.65
 
-    # ── WebSocket Camera Streaming ────────────────────────────────────────────
-    # Inference runs at 2 fps (every 500 ms). Frames arriving faster are
-    # received and acknowledged but skipped for YOLO processing.
-    WS_FRAME_SAMPLE_INTERVAL_SEC: float = 0.5
+    # ── WebSocket Camera Streaming & Detection FPS ────────────────────────────
+    # Explicit FPS target for server-side YOLO inference per model mode.
+    # Controlled inference rate: 5 FPS (200ms interval).
+    DETECTION_FPS_POTHOLE: float = 5.0    # Default FPS for pothole detection (controlled rate)
+    DETECTION_FPS_TRAFFIC: float = 5.0    # Default FPS for traffic detection (controlled rate)
+    WS_FRAME_SAMPLE_INTERVAL_SEC: float = 0.2  # 5 FPS sample interval (200ms)
     # Hard cap per incoming frame — reject frames larger than this.
     WS_MAX_FRAME_SIZE_BYTES: int = 512_000  # 500 KB
 
@@ -64,6 +66,10 @@ class Settings(BaseSettings):
     YOLO_TRAFFIC_WEIGHTS: str = "yolov8n.pt"
     INFERENCE_CONFIDENCE: float = 0.25      # YOLO detection confidence threshold
     INFERENCE_IOU: float = 0.45             # NMS IoU threshold
+    # Pothole-specific Live Monitoring display threshold — higher than the raw YOLO
+    # threshold to suppress low-quality predictions before they reach the frontend.
+    # Traffic mode is unaffected; it continues to use INFERENCE_CONFIDENCE.
+    INFERENCE_CONFIDENCE_POTHOLE: float = 0.45
 
     # ── Event Aggregation / Deduplication ────────────────────────────────────
     # Suppress repeated events of the same type from the same bus within

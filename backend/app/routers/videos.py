@@ -12,8 +12,21 @@ from fastapi.responses import StreamingResponse
 router = APIRouter(prefix="/api/videos", tags=["Videos"])
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
+VIDEO_SEARCH_DIRS = [
+    PROJECT_ROOT / "frontend" / "public" / "videos",
+    PROJECT_ROOT / "edge-ai" / "Pothole_Road_Condition_Model",
+    PROJECT_ROOT / "edge-ai" / "pothole-latest" / "Pothole_Road_Condition_Model",
+]
 POTHOLE_VIDEOS_DIR = PROJECT_ROOT / "edge-ai" / "Pothole_Road_Condition_Model"
 CHUNK_SIZE = 1024 * 512  # 512 KB
+
+def resolve_video_path(filename: str) -> Path:
+    safe_filename = Path(filename).name
+    for directory in VIDEO_SEARCH_DIRS:
+        cand = directory / safe_filename
+        if cand.is_file() and cand.exists():
+            return cand
+    return POTHOLE_VIDEOS_DIR / safe_filename
 
 SAMPLE_VIDEOS = [
     {
@@ -53,11 +66,12 @@ def list_sample_videos():
     """
     samples = []
     for sample in SAMPLE_VIDEOS:
-        file_path = POTHOLE_VIDEOS_DIR / sample["filename"]
+        file_path = resolve_video_path(sample["filename"])
+        is_avail = file_path.exists() and file_path.is_file()
         samples.append({
             **sample,
-            "available": file_path.exists(),
-            "size_bytes": file_path.stat().st_size if file_path.exists() else 0,
+            "available": is_avail,
+            "size_bytes": file_path.stat().st_size if is_avail else 0,
             "stream_url": f"/api/videos/stream/{sample['filename']}",
         })
     return samples
@@ -69,7 +83,7 @@ def stream_sample_video(filename: str, request: Request):
     Stream a sample MP4 video with HTTP 206 Partial Content Range request support for seeking.
     """
     safe_filename = Path(filename).name
-    file_path = POTHOLE_VIDEOS_DIR / safe_filename
+    file_path = resolve_video_path(safe_filename)
 
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail=f"Sample video '{safe_filename}' not found.")

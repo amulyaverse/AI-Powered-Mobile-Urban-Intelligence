@@ -177,6 +177,40 @@ class TestAnalyticsEndpoints:
         assert "trafficHotspots" in data
         assert "criticalAlerts" in data
 
+    def test_summary_critical_alerts_reflects_real_events(self):
+        resp_before = client.get("/api/analytics/summary")
+        assert resp_before.status_code == 200
+        count_before = resp_before.json()["criticalAlerts"]
+
+        # Post a new critical event
+        payload = {
+            "event_type": "pothole",
+            "confidence": 0.95,
+            "severity": "critical",
+            "bus_id": "TEST-BUS-99",
+            "latitude": 28.55,
+            "longitude": 77.25,
+            "status": "new",
+        }
+        create_resp = client.post("/api/events", json=payload)
+        assert create_resp.status_code == 201
+        created_id = create_resp.json()["event_id"]
+
+        resp_after = client.get("/api/analytics/summary")
+        assert resp_after.status_code == 200
+        count_after = resp_after.json()["criticalAlerts"]
+        assert count_after == count_before + 1
+
+        # Acknowledge the newly created alert
+        ack_resp = client.patch(f"/api/alerts/ALT_{created_id}/acknowledge")
+        assert ack_resp.status_code == 200
+        assert ack_resp.json()["acknowledged"] is True
+
+        resp_acked = client.get("/api/analytics/summary")
+        assert resp_acked.status_code == 200
+        count_acked = resp_acked.json()["criticalAlerts"]
+        assert count_acked == count_before
+
     def test_traffic_analytics_shape(self):
         resp = client.get("/api/analytics/traffic")
         assert resp.status_code == 200
@@ -268,6 +302,37 @@ class TestAlertAcknowledge:
         ack_res = client.patch(f"/api/alerts/{target_id}/acknowledge")
         assert ack_res.status_code == 200
         assert ack_res.json()["acknowledged"] is True
+
+    def test_synthesized_event_alert_and_acknowledge(self):
+        """High/critical events should appear in /api/alerts and acknowledging should update event status."""
+        client.post("/api/events", json={
+            "event_id": "EVT_ALERT_TEST_99",
+            "event_type": "pothole",
+            "confidence": 0.95,
+            "severity": "critical",
+            "bus_id": "BUS_TEST_ALERT",
+            "camera_id": "CAM_FRONT",
+            "latitude": 28.5600,
+            "longitude": 77.2100,
+            "timestamp": "2026-09-08T00:00:00Z",
+            "status": "new"
+        })
+
+        alerts = client.get("/api/alerts").json()
+        matching = [a for a in alerts if a["id"] == "ALT_EVT_ALERT_TEST_99"]
+        assert len(matching) == 1
+        assert matching[0]["severity"] == "critical"
+        assert matching[0]["acknowledged"] is False
+        assert "EVT_ALERT_TEST_99" in matching[0]["message"]
+
+        # Acknowledge the synthesized alert
+        ack_res = client.patch("/api/alerts/ALT_EVT_ALERT_TEST_99/acknowledge")
+        assert ack_res.status_code == 200
+        assert ack_res.json()["acknowledged"] is True
+
+        # Verify underlying event is now verified
+        evt = client.get("/api/events/EVT_ALERT_TEST_99").json()
+        assert evt["status"] == "verified"
 
 
 class TestEventRealtimeBroadcast:

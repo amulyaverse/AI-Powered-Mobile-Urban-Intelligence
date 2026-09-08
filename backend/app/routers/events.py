@@ -183,7 +183,13 @@ def list_events(
     """
     q = db.query(Event)
     if event_type:
-        q = q.filter(Event.event_type == event_type)
+        evt_lower = event_type.strip().lower()
+        if evt_lower in ("congestion", "vehicle_count", "traffic_snapshot", "traffic"):
+            q = q.filter(Event.event_type.in_(["congestion", "vehicle_count", "traffic_snapshot", "traffic"]))
+        elif evt_lower in ("road_defect", "crack"):
+            q = q.filter(Event.event_type.in_(["road_defect", "crack"]))
+        else:
+            q = q.filter(Event.event_type == event_type)
     if severity:
         q = q.filter(Event.severity == severity)
     if status:
