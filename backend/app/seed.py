@@ -234,7 +234,13 @@ def seed_pr37_potholes(db: Session, max_events: int = 50) -> int:
         if db.query(Event).filter(Event.event_id == evt_id).first():
             continue
 
-        raw_sev = str(item.get("severity", "medium")).lower()
+        raw_sev_str = str(item.get("severity", "medium")).strip().lower().replace("-", "_").replace(" ", "_")
+        if raw_sev_str in ("very_high", "veryhigh"):
+            raw_sev = "critical"
+        elif raw_sev_str in ("low", "medium", "high", "critical"):
+            raw_sev = raw_sev_str
+        else:
+            raw_sev = "medium"
         conf = float(item.get("confidence", 0.75))
 
         # Synthetic GPS route step along corridor
@@ -243,7 +249,7 @@ def seed_pr37_potholes(db: Session, max_events: int = 50) -> int:
         evt_lng = round(base_lng + (step_offset * 0.6) + random.uniform(-0.0003, 0.0003), 6)
 
         # Width and area ratios based on PR 37 Approach A heuristic
-        if raw_sev == "high":
+        if raw_sev in ("critical", "high"):
             w_ratio = round(random.uniform(0.24, 0.36), 3)
             a_ratio = round(random.uniform(0.062, 0.11), 4)
         elif raw_sev == "medium":
@@ -283,7 +289,7 @@ def seed_pr37_potholes(db: Session, max_events: int = 50) -> int:
             longitude=evt_lng,
             timestamp=ts,
             evidence=f"/evidence/pr37_snap_{((idx % 30) + 1):03d}.jpg",
-            status="new" if raw_sev == "high" else ("verified" if idx % 2 == 0 else "under_review"),
+            status="new" if raw_sev in ("critical", "high") else ("verified" if idx % 2 == 0 else "under_review"),
             repeated_detections=1,
             source_frame=idx * 15,
             frame_coverage_ratio=a_ratio,
@@ -305,23 +311,21 @@ def seed_pr37_potholes(db: Session, max_events: int = 50) -> int:
 
 def run_seed(db: Session) -> None:
     """
-    Insert seed data only if the tables are empty.
-    Safe to call on every startup.
+    Insert seed data if missing.
+    Safe to call on every startup using merge() idempotence.
     """
-    # 1. Seed fleet and sample events if buses table is empty
-    if db.query(Bus).count() == 0:
-        print("[Seed] Seeding initial fleet and sample data...")
-        for bus in SEED_BUSES:
-            db.merge(bus)
+    # 1. Seed fleet, sample events, and alerts using merge (never duplicates)
+    for bus in SEED_BUSES:
+        db.merge(bus)
 
-        for event in SEED_EVENTS:
-            db.merge(event)
+    for event in SEED_EVENTS:
+        db.merge(event)
 
-        for alert in SEED_ALERTS:
-            db.merge(alert)
+    for alert in SEED_ALERTS:
+        db.merge(alert)
 
-        db.commit()
-        print(f"[Seed] Done — {len(SEED_BUSES)} buses, {len(SEED_EVENTS)} events, {len(SEED_ALERTS)} alerts seeded.")
+    db.commit()
+    print(f"[Seed] Fleet & alerts verified — {len(SEED_BUSES)} buses, {len(SEED_EVENTS)} events, {len(SEED_ALERTS)} alerts.")
 
     # 2. Ensure traffic telemetry exists for analytics charts
     seed_traffic_telemetry(db)

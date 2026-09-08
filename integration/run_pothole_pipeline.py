@@ -18,7 +18,6 @@ EDGE_AI_DIR = PROJECT_ROOT / "edge-ai"
 CANDIDATE_DIRS = [
     EDGE_AI_DIR / "pothole-latest" / "Pothole_Road_Condition_Model",
     EDGE_AI_DIR / "Pothole_Road_Condition_Model",
-    EDGE_AI_DIR / "pothole-detection",
     EDGE_AI_DIR / "pothole_Old",
 ]
 
@@ -109,13 +108,16 @@ def main() -> None:
         else:
             event_type = "pothole"
 
-        raw_sev = str(ai_output.get("severity", "medium")).lower()
-        if raw_sev in ("very high", "critical"):
-            severity = "high"
+        raw_sev = str(ai_output.get("severity", "medium")).lower().strip().replace("-", "_").replace(" ", "_")
+        if raw_sev in ("very_high", "veryhigh", "critical"):
+            severity = "critical"
         elif raw_sev in ("high", "medium", "low"):
             severity = raw_sev
         else:
             severity = "medium"
+
+        if "id" in ai_output and isinstance(ai_output["id"], str):
+            ai_output["id"] = ai_output["id"].replace("_cluster", "")
 
         ai_output["event_type"] = event_type
         ai_output["severity"] = severity

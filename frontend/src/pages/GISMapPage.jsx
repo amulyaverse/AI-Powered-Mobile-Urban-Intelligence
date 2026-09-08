@@ -51,7 +51,16 @@ export default function GISMapPage() {
   // Prepend live incoming detection markers directly on the GIS map
   useEffect(() => {
     if (!latestEvent?.event_id || latestEvent.latitude == null || latestEvent.longitude == null) return;
-    if (selectedType !== 'all' && latestEvent.event_type !== selectedType) return;
+    if (selectedType !== 'all') {
+      const incomingType = (latestEvent.event_type || '').toLowerCase();
+      if (selectedType === 'congestion') {
+        if (!['congestion', 'vehicle_count', 'traffic_snapshot', 'traffic'].includes(incomingType)) return;
+      } else if (selectedType === 'road_defect') {
+        if (!['road_defect', 'crack'].includes(incomingType)) return;
+      } else if (incomingType !== selectedType.toLowerCase()) {
+        return;
+      }
+    }
     setEvents((prev) => {
       if (prev.some((e) => e.event_id === latestEvent.event_id)) return prev;
       return [latestEvent, ...prev];
@@ -104,8 +113,9 @@ export default function GISMapPage() {
   }
 
   const getMarkerIcon = (type) => {
-    if (type === 'pothole') return potholeIcon;
-    if (type === 'congestion') return congestionIcon;
+    const t = (type || '').toLowerCase();
+    if (t === 'pothole' || t === 'road_defect' || t === 'crack') return potholeIcon;
+    if (t === 'congestion' || t === 'vehicle_count' || t === 'traffic_snapshot' || t === 'traffic') return congestionIcon;
     return defaultIcon;
   };
 

@@ -53,6 +53,13 @@ function filterEventsForBus(events, busId) {
   return events.filter((e) => !e.bus_id || e.bus_id === busId);
 }
 
+// ── Explicit Detection FPS Configuration ──────────────────────────────────────
+// Configurable frame rate per second for edge AI stream inference (controlled 2-5 FPS)
+export const DETECTION_FPS_CONFIG = {
+  pothole: 5,   // FPS for Pothole / Road Defect AI (controlled inference rate)
+  traffic: 5,   // FPS for Traffic / Vehicle Count AI (controlled inference rate)
+};
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function LiveMonitoring() {
   const [buses, setBuses] = useState([]);
@@ -94,6 +101,26 @@ export default function LiveMonitoring() {
   const fpsIntervalRef = useRef(null);
   const isStreamingRef = useRef(false);
   const lastFrameSentTimeRef = useRef(0);
+  // Frame-ID synchronization: monotonically-incrementing counter prepended to
+  // each JPEG blob. Frontend tracks lastRenderedFrameId to accept valid in-flight
+  // frames while discarding out-of-order/stale responses.
+  const frameIdRef = useRef(0);
+  const lastSentFrameIdRef = useRef(-1);
+  const lastRenderedFrameIdRef = useRef(-1);
+  const isProcessingFrameRef = useRef(false);
+  const lastDetectionsRef = useRef([]);
+
+  const resolveVideoUrl = (streamUrl) => {
+    if (!streamUrl) return '';
+    if (streamUrl.startsWith('/videos/')) {
+      const base = import.meta.env.BASE_URL || '/';
+      return `${base.replace(/\/+$/, '')}/${streamUrl.replace(/^\//, '')}`;
+    }
+    if (streamUrl.startsWith('http') || streamUrl.startsWith('blob:') || streamUrl.startsWith('data:')) {
+      return streamUrl;
+    }
+    return `${API_BASE_URL}${streamUrl}`;
+  };
 
   // Load sample test videos from PR 37
   useEffect(() => {
@@ -103,7 +130,7 @@ export default function LiveMonitoring() {
           setSampleVideos(vids);
           const first = vids[0];
           if (first && !videoFileUrl) {
-            setVideoFileUrl(`${API_BASE_URL}${first.stream_url}`);
+            setVideoFileUrl(resolveVideoUrl(first.stream_url));
             setSelectedPresetId(first.id);
           }
         }
@@ -113,7 +140,7 @@ export default function LiveMonitoring() {
 
   const handleSelectPreset = (video) => {
     setSelectedPresetId(video.id);
-    setVideoFileUrl(`${API_BASE_URL}${video.stream_url}`);
+    setVideoFileUrl(resolveVideoUrl(video.stream_url));
     if (video.recommended_mode && video.recommended_mode !== inferenceMode) {
       setInferenceMode(video.recommended_mode);
     }
@@ -159,7 +186,7 @@ export default function LiveMonitoring() {
     const ctx = canvasEl.getContext('2d');
     if (!ctx) return;
 
-    // Match canvas display size to video display size
+    // Match canvas display size to video container display size
     const rect = videoEl.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
 
@@ -169,9 +196,37 @@ export default function LiveMonitoring() {
 
     if (!detections || detections.length === 0) return;
 
-    // Inferences were performed on standard 640x480 frame
-    const scaleX = canvasEl.width / 640;
-    const scaleY = canvasEl.height / 480;
+    // Inferences were performed on native video frame dimensions (e.g. 640x360).
+    // The <video> element uses object-fit: contain, which produces letterbox (top/bottom)
+    // or pillarbox (left/right) margins when the container aspect ratio differs from the video.
+    const videoWidth = videoEl.videoWidth || 640;
+    const videoHeight = videoEl.videoHeight || 360;
+    const videoAspect = videoWidth / videoHeight;
+    const elementWidth = rect.width;
+    const elementHeight = rect.height;
+    const containerAspect = elementWidth / elementHeight;
+
+    let renderedWidth = elementWidth;
+    let renderedHeight = elementHeight;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (containerAspect > videoAspect) {
+      // Container is wider than the video -> pillarboxed (black bars on left & right)
+      renderedHeight = elementHeight;
+      renderedWidth = elementHeight * videoAspect;
+      offsetX = (elementWidth - renderedWidth) / 2;
+      offsetY = 0;
+    } else {
+      // Container is taller than the video -> letterboxed (black bars on top & bottom)
+      renderedWidth = elementWidth;
+      renderedHeight = elementWidth / videoAspect;
+      offsetX = 0;
+      offsetY = (elementHeight - renderedHeight) / 2;
+    }
+
+    const scaleX = renderedWidth / videoWidth;
+    const scaleY = renderedHeight / videoHeight;
 
     detections.forEach((det) => {
       let bx1 = 0, by1 = 0, bx2 = 0, by2 = 0;
@@ -185,10 +240,17 @@ export default function LiveMonitoring() {
         [bx1, by1, bx2, by2] = det;
       }
 
-      const x = bx1 * scaleX;
-      const y = by1 * scaleY;
-      const w = Math.max(12, (bx2 - bx1) * scaleX);
-      const h = Math.max(12, (by2 - by1) * scaleY);
+      // Clamp native YOLO coordinates to frame bounds to prevent margin overflow
+      const clampedX1 = Math.max(0, Math.min(videoWidth, bx1));
+      const clampedY1 = Math.max(0, Math.min(videoHeight, by1));
+      const clampedX2 = Math.max(0, Math.min(videoWidth, bx2));
+      const clampedY2 = Math.max(0, Math.min(videoHeight, by2));
+
+      // Map from native video pixel space to actual visible screen pixels
+      const x = offsetX + (clampedX1 * scaleX);
+      const y = offsetY + (clampedY1 * scaleY);
+      const w = Math.max(8, (clampedX2 - clampedX1) * scaleX);
+      const h = Math.max(8, (clampedY2 - clampedY1) * scaleY);
 
       const cls = (det.class || det.label || det.type || 'pothole').toLowerCase();
       const conf = det.conf != null ? Math.round(det.conf * 100) : (det.confidence != null ? Math.round(det.confidence * 100) : null);
@@ -210,18 +272,34 @@ export default function LiveMonitoring() {
       ctx.font = 'bold 11px sans-serif';
       const textWidth = ctx.measureText(label).width;
       const badgeHeight = 18;
+      const badgeX = Math.max(offsetX, Math.min(offsetX + renderedWidth - textWidth - 8, x));
+      const badgeY = y >= offsetY + badgeHeight ? y - badgeHeight : y;
 
       ctx.fillStyle = bgColor;
-      ctx.fillRect(x, Math.max(0, y - badgeHeight), textWidth + 8, badgeHeight);
+      ctx.fillRect(badgeX, badgeY, textWidth + 8, badgeHeight);
 
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(label, x + 4, Math.max(12, y - 4));
+      ctx.fillText(label, badgeX + 4, badgeY + 13);
     });
   }, []);
+
+  // Redraw boxes on window resize to ensure alignment is maintained across viewport changes
+  useEffect(() => {
+    const handleResize = () => {
+      if (isStreamingRef.current && videoRef.current && canvasRef.current && lastDetectionsRef.current.length > 0) {
+        drawBoxes(lastDetectionsRef.current, videoRef.current, canvasRef.current);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [drawBoxes]);
 
   // ── Stop Camera Stream ───────────────────────────────────────────────────────
   const stopCameraStream = useCallback(() => {
     isStreamingRef.current = false;
+    isProcessingFrameRef.current = false;
+    lastRenderedFrameIdRef.current = -1;
+    lastDetectionsRef.current = [];
     setIsStreaming(false);
     setStreamStatus('Standby');
     setStreamFps(0);
@@ -260,6 +338,11 @@ export default function LiveMonitoring() {
     setLastDetections([]);
     setLastDetectionSummary(null);
     setFramesSent(0);
+    frameIdRef.current = 0;
+    lastSentFrameIdRef.current = -1;
+    lastRenderedFrameIdRef.current = -1;
+    isProcessingFrameRef.current = false;
+    lastDetectionsRef.current = [];
 
     const busId = selectedBus?.id || 'BUS_021';
     const lat = selectedBus?.last_lat ?? selectedBus?.lat ?? 28.6139;
@@ -300,7 +383,68 @@ export default function LiveMonitoring() {
       return;
     }
 
-    // 2. Connect WebSocket to backend camera ingestion endpoint
+    // 2. Fallback simulation loop function for offline / GitHub live link mode
+    const startSimulationMode = () => {
+      setStreamStatus('Simulation');
+      setIsStreaming(true);
+      isStreamingRef.current = true;
+      frameCountWindowRef.current = 0;
+
+      // Start FPS counter
+      fpsIntervalRef.current = setInterval(() => {
+        setStreamFps(frameCountWindowRef.current);
+        frameCountWindowRef.current = 0;
+      }, 1000);
+
+      // 2 FPS frame capture & simulated detection loop
+      streamIntervalRef.current = setInterval(() => {
+        if (!isStreamingRef.current || !videoRef.current) return;
+        const video = videoRef.current;
+        if (video.videoWidth === 0 || video.videoHeight === 0) return;
+
+        frameCountWindowRef.current += 1;
+        setFramesSent((prev) => prev + 1);
+        setLatestLatencyMs(Math.floor(40 + Math.random() * 25));
+
+        if (inferenceMode === 'pothole') {
+          const sampleBoxes = [
+            { bbox: [170, 220, 430, 350], class: 'pothole', conf: 0.92 },
+            { bbox: [110, 310, 280, 400], class: 'crack', conf: 0.86 },
+          ];
+          lastDetectionsRef.current = sampleBoxes;
+          setLastDetections(sampleBoxes);
+          setLastDetectionSummary({
+            event_type: 'pothole',
+            confidence: 0.92,
+            severity: 'high',
+            width_ratio: 0.41,
+            area_ratio: 0.088,
+            boxes: sampleBoxes,
+          });
+          if (canvasRef.current && videoRef.current) {
+            drawBoxes(sampleBoxes, videoRef.current, canvasRef.current);
+          }
+        } else {
+          const sampleBoxes = [
+            { bbox: [140, 170, 270, 280], class: 'car', conf: 0.94 },
+            { bbox: [320, 150, 490, 330], class: 'bus', conf: 0.91 },
+          ];
+          lastDetectionsRef.current = sampleBoxes;
+          setLastDetections(sampleBoxes);
+          setLastDetectionSummary({
+            event_type: 'traffic',
+            density: 'MODERATE',
+            total_vehicles: 8,
+            boxes: sampleBoxes,
+          });
+          if (canvasRef.current && videoRef.current) {
+            drawBoxes(sampleBoxes, videoRef.current, canvasRef.current);
+          }
+        }
+      }, 500);
+    };
+
+    // 3. Connect WebSocket to backend or fall back to client simulation
     const wsUrl = getWsUrl(`/api/ws/camera/${busId}?lat=${lat}&lng=${lng}&mode=${inferenceMode}`);
     let ws;
     try {
@@ -308,8 +452,8 @@ export default function LiveMonitoring() {
       ws.binaryType = 'blob';
       streamWsRef.current = ws;
     } catch (wsErr) {
-      setCameraError(`Failed to connect to camera WebSocket: ${wsErr.message}`);
-      setStreamStatus('Error');
+      console.warn('[LiveMonitoring] Camera WebSocket unavailable, running client simulation:', wsErr);
+      startSimulationMode();
       return;
     }
 
@@ -325,29 +469,54 @@ export default function LiveMonitoring() {
         frameCountWindowRef.current = 0;
       }, 1000);
 
-      // 3. Start 2 FPS frame capture loop (every 500 ms)
+      // 3. Start frame capture loop based on explicit configured FPS for the mode
+      const targetFps = DETECTION_FPS_CONFIG[inferenceMode] || 5;
+      const captureIntervalMs = Math.round(1000 / targetFps);
+
       streamIntervalRef.current = setInterval(() => {
         if (!isStreamingRef.current || !videoRef.current || ws.readyState !== WebSocket.OPEN) return;
 
-        const video = videoRef.current;
-        if (video.videoWidth === 0 || video.videoHeight === 0) return;
+        // Controlled inference loop: throttle capturing next frame if an in-flight frame is still being processed
+        // (with a 1000ms timeout recovery safeguard so network blips never lock the loop)
+        if (isProcessingFrameRef.current && performance.now() - lastFrameSentTimeRef.current < 1000) {
+          return;
+        }
 
-        // Draw frame onto offscreen canvas (640x480)
+        const video = videoRef.current;
+        if (video.videoWidth === 0 || video.videoHeight === 0 || video.paused) return;
+
+        // Use the video's native dimensions so the aspect ratio is preserved.
+        // Hardcoding 640×480 was stretching 640×360 (16:9) video vertically,
+        // which suppressed lower-half pothole detections.
+        const capW = video.videoWidth || 640;
+        const capH = video.videoHeight || 360;
+
+        // Draw frame onto offscreen canvas at native capture resolution
         let offscreenCanvas = hiddenCanvasRef.current;
-        if (!offscreenCanvas) {
+        if (
+          !offscreenCanvas ||
+          offscreenCanvas.width !== capW ||
+          offscreenCanvas.height !== capH
+        ) {
           offscreenCanvas = document.createElement('canvas');
-          offscreenCanvas.width = 640;
-          offscreenCanvas.height = 480;
+          offscreenCanvas.width = capW;
+          offscreenCanvas.height = capH;
           hiddenCanvasRef.current = offscreenCanvas;
         }
         const ctx = offscreenCanvas.getContext('2d');
-        ctx.drawImage(video, 0, 0, 640, 480);
+        ctx.drawImage(video, 0, 0, capW, capH);
 
         offscreenCanvas.toBlob(
           (blob) => {
-            if (blob && ws.readyState === WebSocket.OPEN) {
+            if (blob && ws.readyState === WebSocket.OPEN && isStreamingRef.current) {
+              const currentFrameId = frameIdRef.current++;
+              lastSentFrameIdRef.current = currentFrameId;
+              isProcessingFrameRef.current = true;
+              const header = new ArrayBuffer(4);
+              new DataView(header).setUint32(0, currentFrameId, /* littleEndian= */ true);
+              const combined = new Blob([header, blob], { type: 'application/octet-stream' });
               lastFrameSentTimeRef.current = performance.now();
-              ws.send(blob);
+              ws.send(combined);
               frameCountWindowRef.current += 1;
               setFramesSent((prev) => prev + 1);
             }
@@ -355,11 +524,12 @@ export default function LiveMonitoring() {
           'image/jpeg',
           0.8
         );
-      }, 500); // 2 FPS
+      }, captureIntervalMs);
     };
 
     ws.onmessage = (event) => {
       try {
+        isProcessingFrameRef.current = false;
         if (lastFrameSentTimeRef.current > 0) {
           setLatestLatencyMs(Math.round(performance.now() - lastFrameSentTimeRef.current));
         }
@@ -368,7 +538,22 @@ export default function LiveMonitoring() {
         if (data.status === 'frame_skipped') return;
         if (data.status === 'suppressed' && !data.boxes && !data.detections) return;
 
+        // Monotonic frame synchronization: discard out-of-order/older responses,
+        // but accept valid in-flight responses for any frame >= last rendered frame.
+        if (
+          data.frame_id !== undefined &&
+          data.frame_id !== null &&
+          data.frame_id < lastRenderedFrameIdRef.current
+        ) {
+          return; // Out-of-order or stale response — discard overlay
+        }
+
+        if (data.frame_id !== undefined && data.frame_id !== null) {
+          lastRenderedFrameIdRef.current = data.frame_id;
+        }
+
         if (data.status === 'no_detection') {
+          lastDetectionsRef.current = [];
           setLastDetections([]);
           setLastDetectionSummary({ status: 'clear', message: '0 detections (Clear)' });
           if (canvasRef.current && videoRef.current) {
@@ -379,6 +564,7 @@ export default function LiveMonitoring() {
 
         // Detections returned
         const boxes = data.detections || data.boxes || [];
+        lastDetectionsRef.current = boxes;
         setLastDetections(boxes);
         setLastDetectionSummary(data);
 
@@ -391,15 +577,19 @@ export default function LiveMonitoring() {
     };
 
     ws.onerror = (err) => {
-      console.error('[LiveMonitoring] Camera WS error:', err);
-      setCameraError('Camera stream connection failed.');
-      setStreamStatus('Error');
+      isProcessingFrameRef.current = false;
+      console.warn('[LiveMonitoring] Camera WS error, continuing with in-browser simulation:', err);
+      if (!isStreamingRef.current || streamStatus !== 'Streaming') {
+        startSimulationMode();
+      }
     };
 
     ws.onclose = () => {
-      if (isStreamingRef.current) {
-        setStreamStatus('Standby');
-        stopCameraStream();
+      isProcessingFrameRef.current = false;
+      if (isStreamingRef.current && streamStatus !== 'Simulation') {
+        console.info('[LiveMonitoring] Camera WS closed, continuing feed with in-browser simulation');
+        if (streamIntervalRef.current) clearInterval(streamIntervalRef.current);
+        startSimulationMode();
       }
     };
   };
@@ -703,13 +893,15 @@ export default function LiveMonitoring() {
                   <div className="flex items-center gap-2">
                     <span
                       className={`text-[11px] px-2 py-0.5 rounded uppercase font-bold flex items-center gap-1.5 ${
-                        isStreaming
+                        streamStatus === 'Streaming'
                           ? 'bg-red-500 text-white animate-pulse'
+                          : streamStatus === 'Simulation'
+                          ? 'bg-amber-500 text-white animate-pulse'
                           : 'bg-slate-700 text-slate-300'
                       }`}
                     >
                       <span className={`w-1.5 h-1.5 rounded-full ${isStreaming ? 'bg-white' : 'bg-slate-400'}`} />
-                      {isStreaming ? 'LIVE INGESTION' : 'STANDBY'}
+                      {streamStatus === 'Streaming' ? 'LIVE INGESTION' : streamStatus === 'Simulation' ? 'DEMO SIMULATION' : 'STANDBY'}
                     </span>
                     <span className="bg-black/60 text-white font-mono text-[11px] px-2 py-0.5 rounded border border-white/10">
                       {selectedBus.id} · CAM_FRONT

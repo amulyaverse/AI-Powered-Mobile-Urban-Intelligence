@@ -166,3 +166,52 @@ class TestIntegrationCompatibility:
         data = resp.json()
         assert data["status"] == "ok"
         assert "events_stored" in data
+
+    def test_post_very_high_severity_normalizes_to_critical(self):
+        """Verify 'VERY HIGH' severity from edge-ai is normalized to 'critical'."""
+        payload = {
+            "event_type": "pothole",
+            "confidence": 0.92,
+            "severity": "VERY HIGH",
+            "bus_id": "BUS_021",
+            "latitude": 28.6139,
+            "longitude": 77.2090,
+        }
+        resp = client.post("/api/events", json=payload)
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["severity"] == "critical"
+
+    def test_post_pothole_resolved_event(self):
+        """Verify 'pothole_resolved' event_type is accepted."""
+        payload = {
+            "event_type": "pothole_resolved",
+            "confidence": 0.90,
+            "severity": "low",
+            "bus_id": "BUS_021",
+            "latitude": 28.6139,
+            "longitude": 77.2090,
+            "status": "resolved",
+        }
+        resp = client.post("/api/events", json=payload)
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["event_type"] == "pothole_resolved"
+        assert data["status"] == "resolved"
+
+    def test_list_events_congestion_filter_matches_vehicle_count(self):
+        """Verify GET /api/events?event_type=congestion returns vehicle_count events."""
+        client.post("/api/events", json={
+            "event_type": "traffic_snapshot",
+            "confidence": 0.88,
+            "severity": "high",
+            "bus_id": "BUS_021",
+            "latitude": 28.6139,
+            "longitude": 77.2090,
+        })
+        resp = client.get("/api/events?event_type=congestion")
+        assert resp.status_code == 200
+        events = resp.json()
+        assert len(events) >= 1
+        assert any(e["event_type"] in ("congestion", "vehicle_count") for e in events)
+

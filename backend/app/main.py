@@ -40,8 +40,7 @@ async def lifespan(app: FastAPI):
     migrate_db(engine)
     db = SessionLocal()
     try:
-        if settings.AUTO_SEED:
-            run_seed(db)
+        run_seed(db)
         # Randomize target bus coordinates somewhere in Delhi whenever server goes live,
         # and ensure all detections of that bus are in the 3 km vicinity.
         from app.services.bus_location_service import randomize_bus_on_startup
@@ -70,6 +69,7 @@ allowed_origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",")]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -104,5 +104,6 @@ def root(db: Session = Depends(get_db)):
 
 
 @app.get("/health", tags=["Health"])
+@app.get("/api/health", tags=["Health"])
 def health():
     return {"status": "healthy"}
