@@ -25,15 +25,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Dict, Tuple, Optional
 import numpy as np
-from scipy.optimize import linear_sum_assignment
+try:
+    from scipy.optimize import linear_sum_assignment
+except ImportError:
+    linear_sum_assignment = None
 
 try:
     from filterpy.kalman import KalmanFilter
 except ImportError:
-    raise ImportError(
-        "filterpy not found.\n"
-        "Install it with:  pip install filterpy"
-    )
+    KalmanFilter = None
 
 from detector import Detection
 from config import SORT_MAX_AGE, SORT_MIN_HITS, SORT_IOU_THRESH
@@ -53,6 +53,11 @@ class KalmanBoxTracker:
     _count = 0
 
     def __init__(self, detection: Detection) -> None:
+        if KalmanFilter is None:
+            raise ImportError(
+                "filterpy not found.\n"
+                "Install it with:  pip install filterpy"
+            )
         self.kf = KalmanFilter(dim_x=7, dim_z=4)
         # State transition
         self.kf.F = np.array([
@@ -255,6 +260,11 @@ class VehicleTracker:
         if not self._trackers or not detections:
             return [], list(range(len(detections))), list(range(len(self._trackers)))
 
+        if linear_sum_assignment is None:
+            raise ImportError(
+                "scipy not found.\n"
+                "Install it with:  pip install scipy"
+            )
         iou_mat = _iou_matrix(self._trackers, detections)
         trk_idxs, det_idxs = linear_sum_assignment(-iou_mat)
 

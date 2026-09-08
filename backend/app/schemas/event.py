@@ -17,7 +17,7 @@ import uuid
 
 # ── Allowed values ──────────────────────────────────────────────────────────
 
-EVENT_TYPES = {"pothole", "road_defect", "congestion", "vehicle_count", "traffic_snapshot"}
+EVENT_TYPES = {"pothole", "road_defect", "congestion", "vehicle_count", "traffic_snapshot", "pothole_resolved", "traffic", "crack"}
 SEVERITIES  = {"low", "medium", "high", "critical"}
 STATUSES    = {"new", "under_review", "verified", "resolved"}
 DENSITIES   = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
@@ -121,12 +121,22 @@ class EventCreate(BaseModel):
         # 4. Normalize severity
         raw_severity = d.get("severity")
         if isinstance(raw_severity, str):
-            d["severity"] = raw_severity.lower()
+            sev_norm = raw_severity.strip().lower().replace("-", "_").replace(" ", "_")
+            if sev_norm in ("very_high", "veryhigh"):
+                d["severity"] = "critical"
+            else:
+                d["severity"] = sev_norm
         elif not raw_severity:
             # Fallback to density if present (e.g. from TrafficEvent)
             density = d.get("density")
-            if isinstance(density, str) and density.lower() in SEVERITIES:
-                d["severity"] = density.lower()
+            if isinstance(density, str):
+                dens_norm = density.strip().lower().replace("-", "_").replace(" ", "_")
+                if dens_norm in ("very_high", "veryhigh"):
+                    d["severity"] = "critical"
+                elif dens_norm in SEVERITIES:
+                    d["severity"] = dens_norm
+                else:
+                    d["severity"] = "low"
             else:
                 d["severity"] = "low"
 

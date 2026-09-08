@@ -538,7 +538,7 @@ export const getSampleVideos = async () => {
       recommended_mode: 'pothole',
       source: 'Pothole_Road_Condition_Model',
       available: true,
-      stream_url: '/api/videos/stream/cityRoad_potHoles.mp4',
+      stream_url: '/videos/cityRoad_potHoles.mp4',
     },
     {
       id: 'cityRoad_potHoles-side.mp4',
@@ -549,7 +549,7 @@ export const getSampleVideos = async () => {
       recommended_mode: 'pothole',
       source: 'Pothole_Road_Condition_Model',
       available: true,
-      stream_url: '/api/videos/stream/cityRoad_potHoles-side.mp4',
+      stream_url: '/videos/cityRoad_potHoles-side.mp4',
     },
     {
       id: 'ruralRoad_potHoles.mp4',
@@ -560,7 +560,7 @@ export const getSampleVideos = async () => {
       recommended_mode: 'pothole',
       source: 'Pothole_Road_Condition_Model',
       available: true,
-      stream_url: '/api/videos/stream/ruralRoad_potHoles.mp4',
+      stream_url: '/videos/ruralRoad_potHoles.mp4',
     },
   ]);
 };

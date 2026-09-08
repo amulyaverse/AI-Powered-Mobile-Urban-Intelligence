@@ -41,8 +41,21 @@ export default function EventPage() {
     const normStatus = (latestEvent.status || 'new').toLowerCase();
 
     // Filter matching guard
-    if (filterType !== 'all' && normEventType !== filterType) return;
-    if (filterSeverity !== 'all' && normSeverity !== filterSeverity) return;
+    if (filterType !== 'all') {
+      if (filterType === 'congestion') {
+        if (!['congestion', 'vehicle_count', 'traffic_snapshot', 'traffic'].includes(normEventType)) return;
+      } else if (filterType === 'road_defect') {
+        if (!['road_defect', 'crack'].includes(normEventType)) return;
+      } else if (normEventType !== filterType) {
+        return;
+      }
+    }
+    if (filterSeverity !== 'all') {
+      const isSevMatch = (filterSeverity === 'critical')
+        ? (normSeverity === 'critical' || normSeverity === 'very high' || normSeverity === 'very_high')
+        : (normSeverity === filterSeverity);
+      if (!isSevMatch) return;
+    }
     if (filterStatus !== 'all' && normStatus !== filterStatus) return;
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
@@ -74,19 +87,18 @@ export default function EventPage() {
   const loadData = useCallback(async (isInitial = false) => {
     if (isInitial) setLoading(true);
     try {
-      const query = {};
-      if (searchTerm.trim()) query.search = searchTerm.trim();
-      if (filterType !== 'all') query.event_type = filterType;
-      if (filterSeverity !== 'all') query.severity = filterSeverity;
-      if (filterStatus !== 'all') query.status = filterStatus;
-
-      const data = await getEvents(query);
+      // Load all telemetry events (up to 300 events)
+      const data = await getEvents({ limit: 300 });
       const safeEvents = Array.isArray(data) ? data : [];
       setEvents((prev) => {
         const map = new Map();
         safeEvents.forEach((e) => { if (e.event_id) map.set(e.event_id, e); });
-        // Preserve any live prepended events that may not yet be in safeEvents
-        prev.forEach((e) => { if (e.event_id && !map.has(e.event_id)) map.set(e.event_id, e); });
+        // Preserve any live prepended edge events
+        prev.forEach((e) => {
+          if (e.event_id && !map.has(e.event_id) && e._isLive) {
+            map.set(e.event_id, e);
+          }
+        });
         const merged = Array.from(map.values());
         merged.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         return merged;
@@ -104,22 +116,91 @@ export default function EventPage() {
     } finally {
       if (isInitial) setLoading(false);
     }
-  }, [searchTerm, filterType, filterSeverity, filterStatus, location.state]);
+  }, [location.state]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      loadData(true);
-    }, 150);
-    return () => clearTimeout(timer);
+    loadData(true);
   }, [loadData]);
 
-  // Periodic background sync every 4s to keep real-time list fresh
+  // When navigated with a selectedEventId from AlertPanel or Overview, sync search filter
+  useEffect(() => {
+    if (location.state?.selectedEventId) {
+      setSearchTerm(location.state.selectedEventId);
+    }
+  }, [location.state?.selectedEventId]);
+
+  // Periodic background sync every 6s to keep real-time list fresh
   useEffect(() => {
     const poller = setInterval(() => {
       loadData(false);
-    }, 4000);
+    }, 6000);
     return () => clearInterval(poller);
   }, [loadData]);
+
+  // Instant responsive client-side filtering across search term, type, severity, and status
+  const filteredEvents = React.useMemo(() => {
+    return events.filter((event) => {
+      // 1. Search term match (event_id, bus_id, event_type, severity, status)
+      if (searchTerm.trim()) {
+        const term = searchTerm.trim().toLowerCase();
+        const idMatch = (event.event_id || '').toLowerCase().includes(term);
+        const busMatch = (event.bus_id || '').toLowerCase().includes(term);
+        const typeMatch = (event.event_type || '').toLowerCase().includes(term);
+        const sevMatch = (event.severity || '').toLowerCase().includes(term);
+        const statusMatch = (event.status || '').toLowerCase().includes(term);
+        if (!idMatch && !busMatch && !typeMatch && !sevMatch && !statusMatch) return false;
+      }
+
+      // 2. Event type filter
+      if (filterType !== 'all') {
+        const evtType = (event.event_type || '').toLowerCase();
+        if (filterType === 'congestion') {
+          if (!['congestion', 'vehicle_count', 'traffic_snapshot', 'traffic'].includes(evtType)) return false;
+        } else if (filterType === 'road_defect') {
+          if (!['road_defect', 'crack'].includes(evtType)) return false;
+        } else if (evtType !== filterType.toLowerCase()) {
+          return false;
+        }
+      }
+
+      // 3. Severity filter
+      if (filterSeverity !== 'all') {
+        const sev = (event.severity || '').toLowerCase();
+        if (filterSeverity === 'critical') {
+          if (sev !== 'critical' && sev !== 'very high' && sev !== 'very_high') return false;
+        } else if (sev !== filterSeverity.toLowerCase()) {
+          return false;
+        }
+      }
+
+      // 4. Status filter
+      if (filterStatus !== 'all') {
+        const st = (event.status || 'new').toLowerCase();
+        if (st !== filterStatus.toLowerCase()) return false;
+      }
+
+      return true;
+    });
+  }, [events, searchTerm, filterType, filterSeverity, filterStatus]);
+
+  // Quick filter counts
+  const counts = React.useMemo(() => {
+    let potholes = 0;
+    let defects = 0;
+    let congestion = 0;
+    let critical = 0;
+    let high = 0;
+    events.forEach((e) => {
+      const t = (e.event_type || '').toLowerCase();
+      const s = (e.severity || '').toLowerCase();
+      if (t === 'pothole') potholes += 1;
+      if (t === 'road_defect' || t === 'crack') defects += 1;
+      if (t === 'congestion' || t === 'vehicle_count' || t === 'traffic_snapshot' || t === 'traffic') congestion += 1;
+      if (s === 'critical' || s === 'very high' || s === 'very_high') critical += 1;
+      if (s === 'high') high += 1;
+    });
+    return { potholes, defects, congestion, critical, high };
+  }, [events]);
 
   const handleStatusUpdate = async (eventId, newStatus) => {
     try {
@@ -138,13 +219,16 @@ export default function EventPage() {
     setFilterStatus('all');
   };
 
-  const hasActiveFilters = searchTerm || filterType !== 'all' || filterSeverity !== 'all' || filterStatus !== 'all';
+  const hasActiveFilters = searchTerm.trim() !== '' || filterType !== 'all' || filterSeverity !== 'all' || filterStatus !== 'all';
 
   const getSeverityColor = (severity) => {
     switch (severity?.toLowerCase()) {
       case 'critical':
-      case 'high':
+      case 'very high':
+      case 'very_high':
         return 'bg-red-100 text-red-700';
+      case 'high':
+        return 'bg-orange-100 text-orange-700';
       case 'medium':
         return 'bg-amber-100 text-amber-700';
       case 'low':
@@ -295,12 +379,101 @@ export default function EventPage() {
             </div>
           </div>
         )}
+
+        {/* Quick Filter Buttons Bar & Count Header */}
+        <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => { setFilterType('all'); setFilterSeverity('all'); setFilterStatus('all'); }}
+              className={`px-3 py-1 rounded-full text-xs font-semibold border transition cursor-pointer ${
+                filterType === 'all' && filterSeverity === 'all' && filterStatus === 'all'
+                  ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              All ({events.length})
+            </button>
+            <button
+              onClick={() => setFilterType(filterType === 'pothole' ? 'all' : 'pothole')}
+              className={`px-3 py-1 rounded-full text-xs font-semibold border transition cursor-pointer ${
+                filterType === 'pothole'
+                  ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-amber-50 hover:text-amber-700'
+              }`}
+            >
+              Potholes ({counts.potholes})
+            </button>
+            <button
+              onClick={() => setFilterType(filterType === 'road_defect' ? 'all' : 'road_defect')}
+              className={`px-3 py-1 rounded-full text-xs font-semibold border transition cursor-pointer ${
+                filterType === 'road_defect'
+                  ? 'bg-orange-600 text-white border-orange-600 shadow-xs'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-orange-50 hover:text-orange-700'
+              }`}
+            >
+              Road Defects ({counts.defects})
+            </button>
+            <button
+              onClick={() => setFilterType(filterType === 'congestion' ? 'all' : 'congestion')}
+              className={`px-3 py-1 rounded-full text-xs font-semibold border transition cursor-pointer ${
+                filterType === 'congestion'
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-blue-50 hover:text-blue-700'
+              }`}
+            >
+              Congestion ({counts.congestion})
+            </button>
+            <button
+              onClick={() => setFilterSeverity(filterSeverity === 'critical' ? 'all' : 'critical')}
+              className={`px-3 py-1 rounded-full text-xs font-semibold border transition cursor-pointer ${
+                filterSeverity === 'critical'
+                  ? 'bg-red-600 text-white border-red-600 shadow-xs'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-red-50 hover:text-red-700'
+              }`}
+            >
+              Critical ({counts.critical})
+            </button>
+            <button
+              onClick={() => setFilterSeverity(filterSeverity === 'high' ? 'all' : 'high')}
+              className={`px-3 py-1 rounded-full text-xs font-semibold border transition cursor-pointer ${
+                filterSeverity === 'high'
+                  ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-amber-50 hover:text-amber-700'
+              }`}
+            >
+              High ({counts.high})
+            </button>
+          </div>
+
+          <div className="text-xs text-slate-500 font-medium ml-auto flex items-center gap-2">
+            <span>
+              Showing <strong className="text-slate-800 font-bold">{filteredEvents.length}</strong> of{' '}
+              <strong className="text-slate-800">{events.length}</strong> events
+            </span>
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="text-brand-600 hover:text-brand-800 font-semibold underline cursor-pointer ml-1"
+              >
+                Reset filters
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="bg-white rounded-lg shadow-xs border border-slate-200 overflow-hidden">
-        {events.length === 0 ? (
-          <div className="p-8 text-center text-slate-500 text-sm">
-            No events match the selected filters.
+        {filteredEvents.length === 0 ? (
+          <div className="p-12 text-center text-slate-500 text-sm space-y-3">
+            <p className="font-semibold text-slate-700">No events match the selected search or filters.</p>
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="px-4 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded-md hover:bg-slate-800 cursor-pointer transition shadow-xs"
+              >
+                Clear All Filters
+              </button>
+            )}
           </div>
         ) : (
           <table className="w-full text-left border-collapse">
@@ -317,7 +490,7 @@ export default function EventPage() {
               </tr>
             </thead>
             <tbody>
-              {events.map((event) => (
+              {filteredEvents.map((event) => (
                 <tr 
                   key={event.event_id} 
                   className={`border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer ${
