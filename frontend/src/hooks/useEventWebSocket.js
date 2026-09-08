@@ -123,12 +123,20 @@ export function useEventWebSocket() {
 
       try {
         const event = JSON.parse(e.data);
-        if (!event || !event.event_id) return;
+        // Drop completely empty payloads
+        if (!event || typeof event !== 'object') return;
+        // Skip low-level transport status messages that carry no detection data
+        if (event.status === 'frame_skipped' || event.status === 'frame_rejected') return;
 
-        setLatestEvent(event);
+        // Assign a temporary ID for streaming-status frames that have not been
+        // persisted to DB yet (they have no event_id).
+        const eventId = event.event_id || `live_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        const normalised = { ...event, event_id: eventId };
+
+        setLatestEvent(normalised);
         setEventHistory((prev) => {
-          const filtered = prev.filter((item) => item.event_id !== event.event_id);
-          return [event, ...filtered].slice(0, MAX_HISTORY);
+          const filtered = prev.filter((item) => item.event_id !== eventId);
+          return [normalised, ...filtered].slice(0, MAX_HISTORY);
         });
       } catch (err) {
         console.warn('[EventWS] Failed to parse message:', e.data, err);
