@@ -1,0 +1,25 @@
+[Unit]
+Description=FastAPI Backend for AI-Powered Mobile Urban Intelligence
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/AI-Powered-Mobile-Urban-Intelligence
+EnvironmentFile=/opt/AI-Powered-Mobile-Urban-Intelligence/backend/.env
+ExecStart=/opt/AI-Powered-Mobile-Urban-Intelligence/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --app-dir backend --workers 1
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=20
+LimitNOFILE=65536
+
+# Security hardening
+PrivateTmp=true
+ProtectSystem=full
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

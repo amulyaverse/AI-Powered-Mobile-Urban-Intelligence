@@ -1,0 +1,32 @@
+# Caddyfile — Reverse Proxy Configuration for Oracle Cloud ARM64 VM
+# =================================================================
+# Replace your-api-domain.com with your actual public domain or FQDN.
+# Caddy automatically provisions and renews Let's Encrypt TLS certificates.
+
+{$DOMAIN:localhost} {
+    # Reverse proxy all HTTP & WebSocket requests to local FastAPI backend
+    reverse_proxy 127.0.0.1:8000 {
+        # Pass client headers and WebSocket upgrade headers
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+
+        # WebSocket timeouts and buffer tuning
+        transport http {
+            read_buffer 4096
+            response_header_timeout 60s
+        }
+    }
+
+    # Security & compression headers
+    encode zstd gzip
+
+    # Custom log format for audit
+    log {
+        output file /var/log/caddy/urban_intelligence_access.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+    }
+}
