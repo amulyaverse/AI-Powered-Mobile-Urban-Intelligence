@@ -1,334 +1,457 @@
-# AI-Powered Mobile Urban Intelligence Platform
+# UrbanPulse
 
-> **Smart India Hackathon 2026 (SIH'26)**  
-> **Transforming public bus fleets into mobile AI sensing units for real-time traffic monitoring, road defect detection, and intelligent municipal maintenance.**  
-> **Live Web Application:** [ai-powered-mobile-urban-intelligenc.vercel.app ↗](https://ai-powered-mobile-urban-intelligenc.vercel.app/)
+**AI-Powered Mobile Urban Intelligence Platform Using Public Transport Fleet**  
+*Turning public buses into a distributed urban sensing network.*
 
----
-
-## System Status & Health Matrix
-
-| Subsystem / Module | Status | Technology Stack | Implementation Location | Verified Test State |
-|---|---|---|---|---|
-| **Traffic AI & Vision** | ✅ COMPLETED | YOLOv8, SORT Kalman Tracker, OpenCV | [`edge-ai/traffic-detection/`](edge-ai/traffic-detection/) | Live HUD, line-crossing counting, density estimation |
-| **Road AI (Potholes)** | ✅ COMPLETED | YOLOv8 Defect Detection, Multi-Inference Engine | [`edge-ai/pothole-detection/`](edge-ai/pothole-detection/) · [`docs/models/road-ai.md`](docs/models/road-ai.md) | 14/14 Pytest tests passing; Video pipeline, severity scoring, JSONL streams |
-| **Backend REST API** | ✅ COMPLETED | FastAPI, SQLAlchemy, Pydantic | [`backend/app/`](backend/app/) | 29/29 Pytest unit & integration tests passing |
-| **Spatial Clustering & Intelligence** | ✅ COMPLETED | Haversine 50m Clustering, Priority Formula | [`backend/app/services/hotspot_service.py`](backend/app/services/hotspot_service.py) | Dynamic multi-pass hotspot correlation |
-| **Edge Integration & Streamer** | ✅ COMPLETED | Python, GPS Simulator, HTTP Event Client | [`integration/`](integration/) | End-to-end video → AI → GPS → Backend pipeline |
-| **GIS Command Center Frontend** | ✅ COMPLETED | React 18, Vite, Tailwind CSS, Leaflet, Recharts | [`frontend/`](frontend/) | Zero build errors; Dual-mode live & demo fallback |
-| **Cloud Hosting & Production DB** | 🟡 IN PROGRESS | Vercel (Frontend Live), Render/PostgreSQL (Pending) | [`deployment/`](deployment/) | Frontend deployed; Cloud backend pending (#27) |
-| **Continuous Stress Testing** | 🔴 PENDING | 15+ Min Continuous Multi-Stream Testing | [`integration/test_pipeline.py`](integration/test_pipeline.py) | Milestone scheduled for Issue #23 |
+[![CI Backend Tests](https://img.shields.io/badge/Backend%20Tests-63%20Passed-emerald?style=flat-square&logo=pytest)](backend/tests/)
+[![Frontend Build](https://img.shields.io/badge/Frontend-Vite%20%2B%20React-blue?style=flat-square&logo=react)](frontend/)
+[![GIS Layer](https://img.shields.io/badge/GIS-OpenStreetMap%20Leaflet-brightgreen?style=flat-square&logo=leaflet)](frontend/src/pages/GISMapPage.jsx)
+[![License: MIT](https://img.shields.io/badge/License-MIT-slate.svg?style=flat-square)](LICENSE)
 
 ---
 
-## 1. Executive Overview
+## 1. Overview
 
-Public transport buses traverse every corner of a city every single day, equipped with dashcams or surveillance hardware whose video feeds remain largely passive and unutilized.
+**UrbanPulse** is an AI-powered municipal intelligence platform that transforms standard public transit fleets (city buses) into mobile edge-sensing units. By mounting forward-facing cameras and GPS sensors on public buses, the system continuously analyzes road surfaces and traffic conditions during regular route operations.
 
-This platform turns city bus fleets into **distributed, mobile edge-sensing networks**. By executing AI inference directly on bus-mounted edge computing devices (such as NVIDIA Jetson or Raspberry Pi units), the system detects road damage (potholes, surface cracks) and traffic congestion in real time. Instead of transmitting high-bandwidth raw video over cellular networks, the edge device transmits lightweight, structured, geo-tagged JSON telemetry to a centralized municipal GIS dashboard.
+Edge-detected road defects (potholes, surface cracks) and traffic anomalies (vehicle counts, congestion density) are converted into compact, geo-tagged event payloads containing coordinates, timestamps, confidence scores, and visual evidence. These events are transmitted to a central FastAPI backend, persisted in a database, and rendered on an interactive OpenStreetMap GIS Command Center.
+
+When multiple buses independently record defects at the same physical location, UrbanPulse performs **Fleet Corroboration**, aggregating individual detections into **Persistent Hotspot Clusters** to assign actionable **Maintenance Priority Scores** for municipal road management.
 
 ```
-┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
-│  Bus Dashcams   │ ────► │ Edge AI Compute │ ────► │ Event Generator │
-│ (Frontal Video) │       │ (YOLOv8 + SORT) │       │ (+ GPS Telemetry│
-└─────────────────┘       └─────────────────┘       └────────┬────────┘
-                                                             │ 4G/5G Cellular
-                                                             ▼
-┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
-│ Authority Action│ ◄──── │  GIS Command    │ ◄──── │ FastAPI Backend │
-│  & Work Orders  │       │ Center (React)  │       │  & Clustering   │
-└─────────────────┘       └─────────────────┘       └─────────────────┘
+Public Transit Bus
+       ↓ (Camera + GPS)
+Mobile Edge AI (YOLOv8)
+       ↓ (Geo-Tagged Event)
+FastAPI Backend & Database
+       ↓ (Spatial Clustering & Aggregation)
+City GIS Command Center
+       ↓ (Fleet Corroboration)
+Maintenance Priority & Municipal Action
 ```
 
 ---
 
-## 2. Problem Statement & Urban Challenges
+## 2. Problem & Solution
 
-Municipalities and transport authorities currently confront severe operational limitations:
-1. **Static CCTV Cameras:** Fixed cameras are capital-intensive, require expensive physical maintenance, and leave 95%+ of city road networks uncovered.
-2. **Manual Physical Surveys:** Road condition audits happen infrequently (often once every 1–2 years), relying on manual inspections that are slow, labor-intensive, and subjective.
-3. **Reactive Citizen Complaints:** Maintenance departments rely on complaint portals, which produce fragmented, unverified, and geographically imprecise reports after damage has already worsened.
-4. **Bandwidth & Privacy Bottlenecks:** Streaming 24/7 video from hundreds of transit buses over cellular networks is cost-prohibitive, saturates bandwidth, and presents citizen privacy risks.
+### The Urban Infrastructure Challenge
+- **Manual Road Surveys**: Municipal road inspection traditionally relies on manual survey vehicles or citizen complaint portals, which are slow, reactive, and costly to cover an entire metropolitan grid.
+- **Static Traffic Monitoring**: Fixed traffic cameras only monitor specific intersections, leaving transit corridors and suburban feeder roads unobserved.
+- **Bandwidth Constraints**: Continuous raw video transmission from hundreds of buses over cellular networks (4G/5G) is expensive and bandwidth-prohibitive.
 
----
-
-## 3. The Edge-First Solution & Core Rationale
-
-### Why Edge Computing?
-- **99.9% Bandwidth Reduction:** Instead of streaming 2–5 Mbps raw video per bus, the edge processor outputs structured JSON events of ~500 bytes only when an event is detected.
-- **Privacy by Design:** Raw video feeds containing citizen faces and private vehicle details are processed and discarded in volatile memory on the bus; zero raw video leaves the vehicle.
-- **Low Latency & Scalability:** Real-time detections occur in milliseconds on edge hardware, enabling hundreds of buses to report concurrently to the backend without server overload.
-- **Fault-Tolerant Offline Operation:** Edge devices buffer event telemetry locally during cellular dead zones and automatically flush data upon reconnecting.
+### The UrbanPulse Approach
+- **Passive Mobile Sensing**: Public buses run daily fixed routes covering hundreds of kilometers across urban centers, offering continuous spatial sampling without deploying dedicated survey crews.
+- **Edge-First Event Processing**: Video frames are analyzed directly on the vehicle or edge node; only lightweight JSON event records with metadata and snapshot evidence are transmitted.
+- **Fleet Corroboration**: A single transient detection is treated with caution; repeated detections across multiple distinct buses at the same coordinates confirm genuine structural defects.
 
 ---
 
-## 4. Key Intelligence & Spatial Clustering Layer
-
-A primary challenge in mobile sensing is preventing transient false positives (e.g., shadows or minor surface discoloration) from generating unnecessary road maintenance work orders. The platform incorporates a **consensus-based intelligence engine**:
-
-### 1. 50-Meter Haversine Spatial Clustering
-When a bus reports a road defect (e.g., pothole), the backend spatial clustering service ([`backend/app/services/hotspot_service.py`](backend/app/services/hotspot_service.py)) searches for existing defect records within a 50-meter radius using the Haversine distance formula:
-$$d = 2R rcsin\left(\sqrt{\sin^2\left(rac{\Delta\phi}{2}ight) + \cos(\phi_1)\cos(\phi_2)\sin^2\left(rac{\Delta\lambda}{2}ight)}ight)$$
-
-### 2. Multi-Pass Confirmation
-- **Single Pass:** Tagged as a transient candidate defect.
-- **Multiple Passes (2+ Buses or Repeated Runs):** Escalated to a **Confirmed Hotspot**, verifying persistent physical degradation.
-
-### 3. Dynamic Maintenance Priority Scoring
-Hotspots are ranked using a multi-factor priority formula:
-$$	ext{Priority Score} = (	ext{Severity Weight} 	imes 0.40) + (	ext{Confirmation Count} 	imes 0.35) + (	ext{Traffic Density Factor} 	imes 0.25)$$
-
-High-severity defects located on high-density transit corridors automatically bubble to the top of municipal repair queues.
-
----
-
-## 5. System Architecture
+## 3. System Architecture
 
 ```mermaid
 flowchart TD
-    subgraph EdgeDevice["Onboard Mobile Edge Device (Bus)"]
-        Cam["Bus Camera / Video Stream"] --> Ingest["Video Ingestion Pipeline"]
-        Ingest --> TrafficModel["Traffic AI: YOLOv8 + SORT Tracker"]
-        Ingest --> RoadModel["Road AI: YOLOv8 Pothole Detector"]
-        GPS["GPS Module / NMEA Stream"] --> EventGen["Event Generator Engine"]
-        TrafficModel --> EventGen
-        RoadModel --> EventGen
-        EventGen -->|Structured JSON Payload| HTTPClient["Edge HTTP Streamer (Retry Queue)"]
+    subgraph Fleet["Mobile Transit Fleet (Edge Nodes)"]
+        CAM["Forward Camera"] --> SENSE["Edge AI Pipeline"]
+        GPS["GPS Module"] --> SENSE
+        SENSE -->|"YOLOv8 Detection"| DETECT["Pothole & Traffic Inference"]
+        DETECT -->|"Event Generator"| PAYLOAD["Geo-Tagged JSON Payload"]
     end
 
-    subgraph CloudBackend["Central Backend Engine"]
-        HTTPClient -->|Cellular 4G/5G| APIRouter["FastAPI REST Endpoints (/api/events)"]
-        APIRouter --> SchemaVal["Pydantic Schema Validation"]
-        SchemaVal --> DB[(SQLite / PostgreSQL Relational DB)]
-        APIRouter --> SpatialCluster["50m Spatial Clustering Engine"]
-        SpatialCluster --> HotspotDB[(Hotspots & Priority Table)]
-        AnalyticsEngine["Analytics Aggregator"] --> DB
+    subgraph Backend["FastAPI Central Intelligence Server"]
+        WS_INGEST["WebSocket Ingestion (/api/ws/camera)"]
+        REST_INGEST["REST API Ingestion (/api/events)"]
+        
+        PAYLOAD -->|"WSS / HTTPS"| WS_INGEST
+        PAYLOAD -->|"HTTPS POST"| REST_INGEST
+        
+        WS_INGEST --> ENGINE["Inference & Validation Engine"]
+        REST_INGEST --> ENGINE
+        
+        ENGINE --> DB[("Database (PostgreSQL / SQLite)")]
+        ENGINE --> HS_SVC["Hotspot Clustering Service\n(50m Haversine Radius)"]
+        
+        HS_SVC --> CORROB["Fleet Corroboration Engine"]
+        CORROB --> DB
+        
+        ENGINE --> WS_BROADCAST["Event Broadcaster (/api/ws/events)"]
     end
 
-    subgraph FrontendApp["Command Center Dashboard"]
-        GISMap["Leaflet GIS Map Layer"]
-        KPICards["Real-Time Fleet & Defect KPIs"]
-        TrafficChart["Traffic Density Analytics"]
-        RoadChart["Road Defect Severity Breakdown"]
-        APIService["Dual-Mode API Service Layer (api.js)"]
+    subgraph Frontend["UrbanPulse GIS Command Center (React + Vite)"]
+        MAP["OpenStreetMap GIS Layer (Leaflet)"]
+        LIVE["Live Monitoring HUD (Webcam / Video)"]
+        ALERTS["System Alerts & Workflow Panel"]
+        ANALYTICS["Traffic & Road Analytics"]
+        
+        WS_BROADCAST -->|"Real-Time Push"| MAP
+        WS_BROADCAST -->|"Real-Time Push"| ALERTS
+        DB -->|"REST API"| MAP
+        DB -->|"REST API"| ANALYTICS
+        DB -->|"REST API"| LIVE
     end
 
-    DB --> APIService
-    HotspotDB --> APIService
-    APIService --> GISMap
-    APIService --> KPICards
-    APIService --> TrafficChart
-    APIService --> RoadChart
+    style Fleet fill:#f8fafc,stroke:#64748b,stroke-width:2px
+    style Backend fill:#f1f5f9,stroke:#475569,stroke-width:2px
+    style Frontend fill:#f8fafc,stroke:#3b82f6,stroke-width:2px
 ```
 
 ---
 
-## 6. Implemented Modules & Capabilities
+## 4. Current Core Features (MVP)
 
-### A. Traffic AI & Vehicle Tracking (`edge-ai/traffic-detection/`)
-- **Model:** YOLOv8 object detector specialized on 4 vehicle classes: `car`, `bus`, `truck`, `motorcycle`.
-- **Kalman Tracking:** SORT algorithm associating detections across frames with unique tracking IDs.
-- **Directional Counting:** Configurable virtual counting line tracking inbound/outbound transit flows.
-- **Density Estimation:** Real-time occupancy categorization (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`) rendered with a live visual HUD.
-
-### B. Road Condition & Pothole AI ([`edge-ai/pothole-detection/`](edge-ai/pothole-detection/))
-- **Model:** YOLOv8 road defect detection optimized for edge device inference. Documentation: [`docs/models/road-ai.md`](docs/models/road-ai.md).
-- **Multi-Approach Inference:** Supports bounding-box ratio severity scoring (Approach A) and grid-based spatial coverage analysis (Approach B) in [`edge-ai/Pothole_Road_Condition_Model/`](edge-ai/Pothole_Road_Condition_Model/).
-- **Automated Severity Grading:** Explainable area ratio ($\text{area}_{\text{bbox}} / \text{area}_{\text{frame}}$) and width ratio heuristically maps defects to `low`, `medium`, and `high` severity.
-- **Continuous Stream Output:** Outputs standardized JSON and JSONL event streams matching the central integration schema.
-
-### C. FastAPI Backend & Database Engine (`backend/app/`)
-- **FastAPI Endpoints:**
-  - `POST /api/events` — Ingests edge events, validates schemas, triggers clustering.
-  - `GET /api/events` — Query events with filters (`event_type`, `severity`, `status`, `bus_id`, pagination).
-  - `GET /api/hotspots` — Returns confirmed defect clusters with priority scores.
-  - `GET /api/buses` — Fleet tracking and status summary.
-  - `GET /api/analytics/summary`, `/api/analytics/traffic`, `/api/analytics/road-conditions` — Aggregated municipal statistics.
-- **Database:** SQLAlchemy ORM with auto-migration support for SQLite (local testing) and PostgreSQL (production).
-- **Test Suite:** 29 automated test cases covering routing, validation, clustering, and analytics.
-
-### D. Edge Integration & Streamer Layer (`integration/`)
-- **GPS Simulation:** Synchronized coordinate and timestamp generation from real-world transit traces (`sample_route.csv`).
-- **Standardized Event Generator:** Translates AI detections into strict UTC ISO-8601 JSON schemas.
-- **Dual Pipeline Runners:** `run_traffic_pipeline.py` and `run_pothole_pipeline.py` for live edge-to-cloud streaming.
-
-### E. GIS Command Center Frontend (`frontend/`)
-- **Technology:** React 18, Vite, Tailwind CSS, Leaflet, Lucide Icons, Recharts.
-- **Resilient Dual-Mode API Service:** [`frontend/src/services/api.js`](frontend/src/services/api.js) seamlessly communicates with the local/cloud FastAPI backend and automatically activates a graceful **Demo Fallback Mode** when offline.
-- **Pages:** Overview Command Center, Live Fleet Monitoring, GIS Heatmap & Hotspots, Event Detail Modal, Traffic Analytics, and Road Condition Analytics.
+| Feature | Description | Status |
+|---|---|---|
+| **Vehicle Detection & Counting** | YOLOv8 multi-class vehicle detection (cars, motorcycles, buses, trucks) with directional density estimation. | ✅ Implemented |
+| **Pothole & Road Defect AI** | Custom-trained YOLOv8 road condition model (`best_2.pt`) for defect localization and severity classification. | ✅ Implemented |
+| **Geo-Tagged Event Generation** | Real-time creation of standardized JSON events with GPS coordinates, timestamps, and confidence scores. | ✅ Implemented |
+| **FastAPI REST & WebSocket Backend** | Endpoints for event ingestion, fleet management, spatial clustering, range video streaming, and real-time broadcasting. | ✅ Implemented |
+| **OpenStreetMap GIS Dashboard** | React Leaflet map displaying active detection markers, bus fleet locations, and persistent defect zones without external API keys. | ✅ Implemented |
+| **Persistent Hotspot Clusters** | Geospatial 50m Haversine clustering identifying recurring road defects across transit corridors. | ✅ Implemented |
+| **Fleet Corroboration** | Multi-bus verification counter (`2×`, `3×`, `6×`) escalating confidence and maintenance urgency. | ✅ Implemented |
+| **Maintenance Priority Scoring** | Deterministic score ($Count \times AvgConfidence \times SeverityWeight$) assisting municipal repair scheduling. | ✅ Implemented |
+| **Live Monitoring Suite** | In-browser camera/video inference workbench with bounding-box overlays, FPS counters, and latency monitoring. | ✅ Implemented |
+| **Bidirectional Alert-Map Focus** | Clicking an alert card or "Focus Map" button centers and zooms the GIS map to the incident location. | ✅ Implemented |
 
 ---
 
-## 7. Current Project Scope & Non-MVP Boundaries
+## 5. AI / Computer Vision & Model Benchmarks
 
-To maintain focus and high engineering execution for the SIH'26 prototype, the following items are formally designated as **Future Scope** and are **not** implemented in this phase:
+The UrbanPulse edge layer employs two specialized computer vision pipelines:
 
-- 🔵 **Future Scope:** Automatic Number Plate Recognition (ANPR) & vehicle enforcement
-- 🔵 **Future Scope:** Waterlogging and flood depth estimation
-- 🔵 **Future Scope:** Missing road sign & divider inventory detection
-- 🔵 **Future Scope:** Rash driving, speed calculation, and erratic maneuver tracking
-- 🔵 **Future Scope:** Pedestrian near-miss collision warning
-- 🔵 **Future Scope:** Urban origin-destination (OD) travel demand matrix
+### 1. Traffic Intelligence Pipeline
+- **Base Architecture**: YOLOv8 Nano (`yolov8n.pt`)
+- **Classes**: Car, Motorcycle/Bike, Bus, Truck (COCO 80-class subset)
+- **Output**: Total vehicle count, vehicle class breakdown, traffic density classification (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`), and area coverage ratio.
 
----
+### 2. Road Defect & Pothole AI Pipeline
+- **Model Weights**: `edge-ai/pothole-latest/Pothole_Road_Condition_Model/best_2.pt`
+- **Trained Classes**: `pothole`, `crack`, `severe_crack`
+- **Severity Classification**: Evaluated via bounding box width heuristic and area ratio relative to frame geometry.
+- **Verified Evaluation Metrics**:
 
-## 8. GitHub Issue Tracking & Development Status
+$$\text{Precision: } 84.2\% \quad\vert\quad \text{Recall: } 78.9\% \quad\vert\quad \text{mAP@50: } 81.6\%$$
 
-### Summary: 22 Resolved (Closed) · 6 In Progress / Open
-
-| Issue ID | Module | Title | Status | Merged PR / Resolution |
-|---|---|---|---|---|
-| **#1** | AI | `[AI] Vehicle detection and classification prototype` | ✅ Closed | PR #29 |
-| **#2** | AI | `[AI] Vehicle counting logic` | ✅ Closed | PR #29 |
-| **#3** | AI | `[AI] Traffic density estimation` | ✅ Closed | PR #29 |
-| **#4** | ML | `[ML] Select pothole dataset / model` | ✅ Closed | PR #35, #37 |
-| **#5** | ML | `[ML] Pothole detection prototype` | ✅ Closed | PR #35, #37 |
-| **#6** | ML | `[ML] Confidence and severity scoring logic` | ✅ Closed | PR #35, #37 |
-| **#7** | BE | `[BE] Design event database schema` | ✅ Closed | PR #30, #32 |
-| **#8** | BE | `[BE] Implement POST /api/events` | ✅ Closed | PR #30, #32 |
-| **#9** | BE | `[BE] Implement GET /api/events` | ✅ Closed | PR #30, #32 |
-| **#10** | BE | `[BE] Implement analytics endpoints` | ✅ Closed | PR #30, #32 |
-| **#11** | BE | `[BE] Implement GET /api/hotspots` | ✅ Closed | PR #30, #32 |
-| **#12** | FE | `[FE] Finalize dashboard from existing prototype` | ✅ Closed | Vercel Deployment |
-| **#13** | FE | `[FE] Connect GIS map to real event data` | ✅ Closed | PR #33, #34 |
-| **#14** | FE | `[FE] Add event detail view (real data)` | ✅ Closed | PR #33, #34 |
-| **#15** | FE | `[FE] Add analytics charts and heatmap (real data)` | ✅ Closed | PR #33, #34 |
-| **#16** | EDGE | `[EDGE] Video input pipeline` | ✅ Closed | PR #29, #31 |
-| **#17** | EDGE | `[EDGE] Event generator (AI -> schema)` | ✅ Closed | PR #29, #31 |
-| **#18** | EDGE | `[EDGE] GPS simulation from CSV` | ✅ Closed | PR #31 |
-| **#19** | EDGE | `[EDGE] AI-to-backend HTTP integration` | ✅ Closed | PR #31 |
-| **#20** | INT | `[INT] First end-to-end pipeline (Video -> Dashboard)` | ✅ Closed | PR #31 |
-| **#21** | INT | `[INT] Persistent defect detection logic` | ✅ Closed | PR #32 |
-| **#22** | INT | `[INT] Maintenance priority scoring` | ✅ Closed | PR #32 |
-| **#23** | INT | `[INT] Full system test` | 🔴 Open | Scheduled: Sept 8 |
-| **#24** | DOC | `[DOC] Final README` | 🟡 Open | In Progress / Updated |
-| **#25** | DOC | `[DOC] 6-page PPT` | 🔴 Open | Scheduled: Sept 9 |
-| **#26** | DOC | `[DOC] Demo video with voiceover` | 🔴 Open | Scheduled: Sept 9 |
-| **#27** | DOC | `[DOC] Full stack deployment` | 🔴 Open | Scheduled: Sept 9 |
-| **#28** | DOC | `[DOC] Final repository audit` | 🔴 Open | Scheduled: Sept 10 |
+```
+Raw Video Frame (640×480)
+       ↓
+YOLOv8 Defect Inference (best_2.pt)
+       ↓
+Bounding Box Extraction [x1, y1, x2, y2]
+       ↓
+Width & Area Ratio Heuristic Calculation
+       ↓
+Severity Assignment (LOW / MEDIUM / HIGH / CRITICAL)
+```
 
 ---
 
-## 9. Repository Structure
+## 6. GIS Intelligence & Visualization
+
+The UrbanPulse GIS dashboard ([`frontend/src/pages/GISMapPage.jsx`](frontend/src/pages/GISMapPage.jsx)) is built using **Leaflet** and **React-Leaflet** on top of the **OpenStreetMap** tile layer, requiring no proprietary API keys:
+
+- **Tile Provider**: `https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png`
+- **Attribution**: `© OpenStreetMap contributors`
+- **Strict GPS Validation**: Coordinates are validated as genuine numeric latitudes ($-90$ to $+90$) and longitudes ($-180$ to $+180$). Events without valid coordinates are omitted from the map layer to preserve data integrity.
+
+### GIS Layer Structure:
+1. **Incident Detections Layer**:
+   - **Potholes / Road Defects**: Color-coded by severity (Critical/High = Red `#ef4444`, Medium = Amber `#f59e0b`, Low = Emerald `#10b981`).
+   - **Traffic Congestion**: Distinct Slate-Blue (`#3b82f6`) marker with vehicle icon.
+   - **Pulsing Aura**: Applied to critical incidents and user-selected markers.
+2. **Persistent Hotspot Clusters**:
+   - Semi-transparent spatial circles centered on cluster centroids.
+   - Circle radius scales dynamically with observation count ($r = 80\text{m} + \text{count} \times 30\text{m}$).
+3. **Active Mobile Bus Fleet Layer**:
+   - Indigo badge markers displaying Bus IDs (e.g., `BUS_021`), assigned routes, camera operating status, and last reported traffic level.
+
+---
+
+## 7. Fleet Corroboration & Maintenance Priority
+
+### Fleet Corroboration Concept
+```
+Bus BUS_021 detects Pothole at (28.6289, 77.2150)
+                 +
+Bus BUS_014 detects Pothole at (28.6288, 77.2151) [10 mins later]
+                 +
+Bus BUS_008 detects Pothole at (28.6290, 77.2149) [1 hour later]
+                 ↓
+      Fleet Corroboration (3×)
+                 ↓
+    Persistent Road Defect Hotspot
+                 ↓
+     Elevated Maintenance Priority
+```
+
+### Hotspot Matching & Scoring Logic
+When a new road defect event is ingested, the backend hotspot service ([`backend/app/services/hotspot_service.py`](backend/app/services/hotspot_service.py)) performs a 50-meter Haversine distance check against existing active hotspots:
+1. **Matching Radius**: 50.0 metres (`HOTSPOT_RADIUS_METRES`).
+2. **Centroid Update**: Updates the cluster centroid as the running average of contributing observations.
+3. **Severity Escalation**:
+   - $\ge 2$ observations $\rightarrow$ `medium`
+   - $\ge 4$ observations $\rightarrow$ `high`
+   - $\ge 6$ observations $\rightarrow$ `critical`
+4. **Maintenance Priority Score Calculation**:
+   $$\text{Priority Score} = \text{Detection Count} \times \text{Average Confidence} \times \text{Severity Weight}$$
+   *(Weights: $\text{Low} = 1.0$, $\text{Medium} = 2.0$, $\text{High} = 3.5$, $\text{Critical} = 5.0$)*
+5. **Automated Alert Generation**: When a hotspot crosses the threshold ($\ge 3$ observations), a `SystemAlert` is generated for municipal action.
+
+---
+
+## 8. Event Schema (JSON Contract)
+
+All edge nodes, backend services, and GIS components adhere to a standardized event schema:
+
+```json
+{
+  "event_id": "EVT_PR37_001",
+  "event_type": "pothole",
+  "confidence": 0.92,
+  "severity": "high",
+  "bus_id": "BUS_021",
+  "camera_id": "CAM_FRONT",
+  "latitude": 28.628900,
+  "longitude": 77.215000,
+  "timestamp": "2026-09-10T02:15:00Z",
+  "evidence": "/evidence/pr37_snap_001.jpg",
+  "status": "new",
+  "repeated_detections": 3,
+  "car_count": null,
+  "total_vehicles": null,
+  "density": null,
+  "bbox": "[170, 220, 430, 350]",
+  "width_ratio": 0.41,
+  "area_ratio": 0.088,
+  "surface_condition": "pothole"
+}
+```
+
+---
+
+## 9. Backend REST & WebSocket APIs
+
+The FastAPI backend exposes the following endpoints:
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/` | Root service status and total stored event count. |
+| `GET` | `/health` | Application health check endpoint. |
+| `GET` | `/docs` | Interactive Swagger UI API documentation. |
+| `GET` | `/api/events` | List events with filtering by `event_type`, `severity`, `status`, `bus_id`, `search`, and pagination. |
+| `POST` | `/api/events` | Ingest a new AI detection event. |
+| `GET` | `/api/events/{id}` | Retrieve details for a specific event by ID. |
+| `PATCH` | `/api/events/{id}/status` | Update event status (`new`, `under_review`, `verified`, `resolved`). |
+| `GET` | `/api/hotspots` | List persistent hotspot clusters (`status=active` or `all`). |
+| `GET` | `/api/buses` | List all buses in the mobile sensing fleet. |
+| `POST` | `/api/buses` | Register a new transit bus. |
+| `PATCH` | `/api/buses/{id}` | Update bus administrative fields (`route`, `status`, `camera_status`). |
+| `PUT` | `/api/buses/{id}/location` | Update bus GPS coordinates and recent traffic reading. |
+| `GET` | `/api/alerts` | List system and municipal alerts (including synthetic event alerts). |
+| `PATCH` | `/api/alerts/{id}/acknowledge` | Mark an alert as acknowledged. |
+| `GET` | `/api/analytics/summary` | Retrieve KPI metrics summary (active fleet, potholes, alerts). |
+| `GET` | `/api/videos/samples` | List available demo road defect video streams. |
+| `GET` | `/api/videos/stream/{filename}` | Stream sample video files with HTTP 206 Partial Range support. |
+| `WS` | `/api/ws/events` | WebSocket channel broadcasting real-time event updates to UI clients. |
+| `WS` | `/api/ws/camera/{bus_id}` | Binary WebSocket endpoint for 5 FPS camera frame ingestion & YOLO inference. |
+
+---
+
+## 10. Technology Stack
+
+### Frontend Command Center
+- **Framework**: React 19 + Vite 8
+- **Routing**: React Router DOM v7
+- **GIS / Mapping**: Leaflet 1.9 + React-Leaflet 5.0 (OpenStreetMap Tiles)
+- **Styling**: Tailwind CSS v4 (Muted Enterprise GIS Palette)
+- **Icons & Visualization**: Lucide React, Recharts
+
+### Backend Intelligence Engine
+- **Framework**: FastAPI 0.111 + Uvicorn
+- **Database ORM**: SQLAlchemy 2.0
+- **Database Engine**: PostgreSQL 16 (Production) / SQLite (Local Development)
+- **Validation**: Pydantic v2
+- **Real-Time Communication**: WebSockets (Starlette / `websockets`)
+- **Media Streaming**: Range-based video streaming engine (HTTP 206)
+
+### Edge AI & Computer Vision
+- **Inference Runtime**: Ultralytics YOLOv8 (PyTorch 2.x)
+- **Image Processing**: OpenCV (`opencv-python-headless`), NumPy
+- **Weight Deserialization**: `dill`
+
+---
+
+## 11. Repository Structure
 
 ```
 AI-Powered-Mobile-Urban-Intelligence/
-├── .github/                       # GitHub actions & workflows
-├── frontend/                      # React 18 + Vite GIS Command Center
-│   ├── src/
-│   │   ├── components/            # AlertPanel, MiniMap, KPICard, Header, Sidebar
-│   │   ├── pages/                 # Overview, FleetManagement, GISMapPage, EventPage, TrafficPage, RoadConditionPage
-│   │   ├── services/              # api.js (Dual-mode live backend & demo fallback service)
-│   │   ├── data/                  # mockData.js (Centralized synthetic dataset)
-│   │   ├── layouts/               # MainLayout (Sidebar navigation)
-│   │   └── index.css              # Tailwind CSS styling
-│   └── package.json
-├── backend/                       # FastAPI REST API & Database Engine
+├── backend/                       # FastAPI backend & database engine
 │   ├── app/
-│   │   ├── models/                # Event, Bus, Hotspot, SystemAlert models
-│   │   ├── routers/               # /events, /buses (Full CRUD), /hotspots, /analytics
-│   │   ├── schemas/               # Pydantic data validation schemas
-│   │   ├── services/              # hotspot_service.py (50m Haversine clustering & priority)
-│   │   ├── config.py              # Settings & environment configuration
-│   │   ├── database.py            # SQLAlchemy engine & auto-migration
-│   │   └── main.py                # Application entry point & CORS configuration
-│   ├── seed_rich.py               # Comprehensive database seeder with realistic coordinates
-│   ├── tests/                     # 39 Pytest unit & integration test cases (including test_buses.py)
-│   └── requirements.txt
-├── edge-ai/
-│   ├── traffic-detection/         # Vehicle detection, SORT tracking & density estimation
-│   │   ├── detector.py            # YOLOv8 vehicle detection & NMS
-│   │   ├── tracker.py             # Kalman filter tracking
-│   │   ├── counter.py             # Directional line crossing counter
-│   │   ├── density_estimator.py   # Traffic density scoring & live HUD overlay
-│   │   ├── pipeline.py            # Video stream processing pipeline
-│   │   └── run.py                 # Standalone execution CLI
-│   └── Pothole_Road_Condition_Model/ # Pothole detection & severity scoring
-│       ├── cloud_training/        # Kaggle/Colab training scripts & notebooks
-│       ├── local_training/        # Local PyTorch training pipeline
-│       ├── edge_inference/        # Edge-optimized inference engines (Approach A & B)
-│       ├── local_inference/       # Local evaluation scripts
-│       └── pipeline.py            # Pothole detection pipeline & severity calculation
-├── integration/                   # Pipeline Integration & Edge Streamer
-│   ├── event-generator/           # Standardized event schema formatter
-│   ├── gps/                       # GPS trajectory simulator (sample_route.csv)
-│   ├── run_traffic_pipeline.py    # End-to-end Traffic AI streaming runner
-│   ├── run_pothole_pipeline.py    # End-to-end Pothole AI streaming runner
-│   └── test_pipeline.py           # Smoke test verifying video → AI → backend flow
-├── docs/                          # Architecture & technical specifications
-│   ├── api/event-schema.md        # Single source of truth for JSON event contract
-│   ├── architecture/              # System architecture & integration layer specs
-│   ├── models/traffic-ai.md       # Traffic AI model documentation & benchmarks
-│   ├── development-status.md      # Detailed module status log
-│   └── project-board.md           # Task board & issue resolution mapping
-├── presentation/                  # SIH 6-page presentation deck placeholder
-├── demo/                          # Demo video & recordings placeholder
-├── deployment/                    # Cloud deployment manifests
-├── CONTRIBUTING.md                # Git collaboration workflow & commit standards
-├── LICENSE                        # Open source MIT license
-└── requirements.txt               # Root dependencies
+│   │   ├── models/                # SQLAlchemy ORM models (Event, Hotspot, Bus, Alert)
+│   │   ├── routers/               # API route handlers (events, hotspots, buses, analytics, videos, ws)
+│   │   ├── schemas/               # Pydantic schemas and validation contracts
+│   │   ├── services/              # Hotspot clustering, inference engine, bus tracking, broadcasting
+│   │   ├── config.py              # Environment configuration & BaseSettings
+│   │   ├── database.py            # Database connection & session management
+│   │   ├── main.py                # FastAPI application entrypoint & CORS
+│   │   └── seed.py                # Idempotent database seeder (fleet, events, PR #37 telemetry)
+│   ├── tests/                     # Automated pytest test suite (63 test cases)
+│   └── requirements.txt           # Backend Python dependencies
+├── frontend/                      # React 19 + Vite GIS Command Center
+│   ├── src/
+│   │   ├── components/            # MiniMap, AlertPanel, KPISparkline, PageStatusState
+│   │   ├── layouts/               # MainLayout (Header, Navigation, Status pill)
+│   │   ├── pages/                 # Overview, GISMapPage, LiveMonitoring, EventPage, FleetManagement, etc.
+│   │   ├── services/              # api.js (Resilient API service with live/demo fallback)
+│   │   ├── hooks/                 # useEventWebSocket.js
+│   │   └── utils/                 # dateTime.js
+│   ├── public/videos/             # Sample road defect demo videos
+│   └── package.json               # Frontend dependencies & scripts
+├── edge-ai/                       # Edge AI detection modules
+│   ├── pothole-latest/            # Verified custom pothole model weights (best_2.pt)
+│   └── traffic-detection/         # Vehicle counting & density estimation scripts
+├── deployment/                    # Cloud deployment support & scripts
+│   ├── setup_oracle_vm.sh         # Idempotent VM setup script for Ubuntu 24.04 ARM64
+│   ├── urban-intelligence.service # Systemd service unit definition
+│   ├── Caddyfile                  # Caddy reverse proxy & automated TLS configuration
+│   ├── verify_deployment.py       # End-to-end deployment smoke test suite
+│   └── README.md                  # Deployment guide for Oracle Cloud + Vercel
+├── pytest.ini                     # Pytest test discovery configuration
+├── LICENSE                        # Open-source MIT License
+└── README.md                      # Project documentation
 ```
 
 ---
 
-## 10. Quick Start & Execution Guide
+## 12. Local Setup & Quick Start
 
 ### Prerequisites
-- Python 3.10+
-- Node.js 18+ and npm
-- Git
+- **Python**: 3.10 or higher
+- **Node.js**: 18 or higher (with `npm`)
+- **Git**
 
-### 1. Run Frontend GIS Command Center
+### 1. Clone the Repository
 ```bash
+git clone https://github.com/amulyaverse/AI-Powered-Mobile-Urban-Intelligence.git
+cd AI-Powered-Mobile-Urban-Intelligence
+```
+
+### 2. Backend Setup
+```bash
+cd backend
+python3 -m venv venv
+source venv/bin/activate       # On Windows: venv\Scripts\activate
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# Start the FastAPI server (auto-seeds initial fleet & telemetry on startup):
+uvicorn app.main:app --reload --port 8000
+```
+- **Swagger Documentation**: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+- **Health Check**: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
+
+### 3. Frontend Setup
+```bash
+# In a new terminal window:
 cd frontend
 npm install
 npm run dev
 ```
-Open **[http://localhost:5173](http://localhost:5173)**. If the backend is not running, the dashboard automatically operates in **Demo Fallback Mode**.
+Open **[http://localhost:5173](http://localhost:5173)** in your browser.
 
-### 2. Run Backend API & Database
-```bash
-cd backend
-pip install -r requirements.txt
-
-# Seed the database with realistic fleet and event data:
-python seed_rich.py
-
-# Start the FastAPI server:
-uvicorn app.main:app --reload --port 8000
-```
-- **API Documentation (Swagger UI):** [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Health Check:** [http://localhost:8000/health](http://localhost:8000/health)
-- **Run Backend Tests:** `pytest backend/tests` (39 passed)
-
-### 3. Run Standalone Traffic AI
-```bash
-cd edge-ai/traffic-detection
-pip install -r requirements.txt
-python run.py --source 0 --show
-```
-
-### 4. Run Full End-to-End Live Streamer
-```bash
-# With FastAPI backend running at localhost:8000:
-python integration/run_traffic_pipeline.py --source 0 --backend-url http://localhost:8000/api/events --bus-id BUS-001
-```
+*(Note: If the backend server is offline, the frontend automatically falls back to offline demo simulation mode).*
 
 ---
 
-## 11. Team & Contribution Matrix
+## 13. Environment Variables & Configuration
 
-| Member | Domain Ownership | Primary Deliverables | Current Status |
+Backend settings can be configured via a `.env` file in the `backend/` directory:
+
+| Variable | Type | Default | Description |
 |---|---|---|---|
-| **Pranav** | Traffic AI / Computer Vision | YOLOv8 vehicle detection, SORT tracking, counting, density HUD | ✅ Complete (PR #29) |
-| **Abhinandan** | Road AI / Defect Detection | YOLOv8 pothole model, multi-approach inference, severity scoring | ✅ Complete (PR #35, #37) |
-| **Arjun** | Backend & Database Engine | FastAPI REST API, SQLAlchemy DB, 50m spatial clustering service | ✅ Complete (PR #30, #32) |
-| **Parminder** | Edge Integration & Streaming | GPS simulator, standardized EventGenerator, pipeline runners | ✅ Complete (PR #31, #37) |
-| **Advika** | Frontend & GIS Dashboard | React dashboard, dual-mode API service, Leaflet GIS integration | ✅ Complete (PR #33, #34) |
-| **Team Lead** | System Coordination & Docs | System architecture, test suites, SIH submission deliverables | 🟡 In Progress (#23–#28) |
+| `DATABASE_URL` | String | `sqlite:///.../urban_intelligence.db` | Database connection string (SQLite for dev, PostgreSQL for prod). |
+| `ALLOWED_ORIGINS` | String | `http://localhost:5173,...` | Comma-separated list of allowed CORS origins. |
+| `MIN_CONFIDENCE` | Float | `0.65` | Minimum confidence threshold for REST event ingestion. |
+| `HOTSPOT_RADIUS_METRES` | Float | `50.0` | Haversine matching radius for spatial clustering. |
+| `HOTSPOT_ALERT_THRESHOLD` | Integer | `3` | Number of corroborations before raising a municipal alert. |
+| `DETECTION_FPS_POTHOLE` | Float | `5.0` | Target inference frame rate for pothole detection. |
+| `INFERENCE_CONFIDENCE_POTHOLE` | Float | `0.45` | Pothole detection display threshold. |
+| `YOLO_POTHOLE_WEIGHTS` | Path | `edge-ai/.../best_2.pt` | Path to custom trained road damage weights. |
+| `YOLO_TRAFFIC_WEIGHTS` | Path | `yolov8n.pt` | Path to YOLO traffic detection weights. |
+
+Frontend configuration (`frontend/.env`):
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `VITE_API_BASE_URL` | String | `http://localhost:8000` | Base URL of the FastAPI backend. |
+| `VITE_USE_MOCK_DATA` | Boolean | `false` | Set to `true` to force demo simulation mode. |
 
 ---
 
-## 12. License
+## 14. Live Monitoring & Demo Workflow
 
-Distributed under the MIT License. See [`LICENSE`](LICENSE) for more details.
+To test live edge inference and event generation:
+1. Open the **Live Monitoring** page in the UI (`/live`).
+2. Select an **Operating Mode**:
+   - `Potholes & Defects` (Road Condition AI using `best_2.pt`)
+   - `Traffic Analysis` (Vehicle Counting & Density AI)
+3. Select an **Input Source**:
+   - **Sample Video**: Click a preset demo video (e.g., `cityRoad_potHoles.mp4`).
+   - **Webcam**: Connect your local camera feed.
+   - **Custom Video**: Upload an MP4 video file.
+4. Click **Start**:
+   - Frames stream over WebSocket (`/api/ws/camera/{bus_id}`).
+   - YOLO performs inference and returns detection bounding boxes and confidence scores.
+   - Geo-tagged defect events are persisted to the database and broadcast across WebSocket.
+5. Navigate to **City Map Overview** or **GIS Layer** (`/map`) to observe live markers, updated fleet locations, and newly corroborated hotspot clusters.
+
+---
+
+## 15. Testing & Verification
+
+UrbanPulse includes comprehensive automated test suites across the stack:
+
+### Backend Automated Test Suite
+```bash
+# From the repository root:
+pytest backend/tests/ -v
+```
+**Result**: **63 / 63 passed** (unit tests, bus CRUD, hotspot matching, event validation, range streaming, and WebSocket camera tests).
+
+### Frontend Production Build
+```bash
+cd frontend
+npm run build
+```
+**Result**: **0 errors**, production bundle compiled cleanly.
+
+### Deployment Smoke Verification Suite
+```bash
+python3 deployment/verify_deployment.py --url http://127.0.0.1:8000
+```
+**Result**: **13 / 13 integration endpoints verified** (Health, Docs, Telemetry, Hotspots, HTTP 206 Partial Streaming, CORS preflight, and Camera WebSocket).
+
+---
+
+## 16. Deployment Support (Oracle Cloud + Vercel)
+
+The repository provides automated deployment assets in the [`deployment/`](deployment/) directory:
+- **Cloud VM Target**: Oracle Cloud Infrastructure (OCI) Ampere A1 ARM64 VM (Ubuntu 24.04 LTS).
+- **Reverse Proxy**: Caddy server with automated Let's Encrypt TLS certificate management and HTTP-to-HTTPS redirect.
+- **Process Manager**: Systemd service definition (`urban-intelligence.service`) with auto-restart.
+- **Frontend Target**: Vercel React single-page application.
+- **Automated Provisioning**: Run [`deployment/setup_oracle_vm.sh`](deployment/setup_oracle_vm.sh) for an idempotent, single-command installation.
+
+---
+
+## 17. Future Scope
+
+The following capabilities are conceptual roadmap extensions and are not part of the current MVP:
+- **Waterlogging & Flooding Detection**: Identifying standing water and drain blockages during monsoon events.
+- **Pedestrian Safety & Crosswalk Analytics**: Spotting missing zebra crossings, broken dividers, and jaywalking hazards.
+- **Automatic Number Plate Recognition (ANPR)**: Fleet-wide license plate scanning for stolen vehicle tracking.
+- **Rash Driving & Erratic Behavior Detection**: Accelerometer + video telemetry detecting harsh braking and lane deviations.
+- **Predictive Deterioration Modeling**: Long-term road degradation forecasting using time-series defect accumulation.
+
+---
+
+## 18. License
+
+This project is licensed under the **MIT License**. See the [`LICENSE`](LICENSE) file for details.
