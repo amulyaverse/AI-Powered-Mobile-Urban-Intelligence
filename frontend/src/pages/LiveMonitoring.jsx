@@ -832,7 +832,7 @@ export default function LiveMonitoring() {
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-slate-800 flex items-center gap-1.5">
                         <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                        PR #37 Road Condition & Pothole Video Feeds:
+                      
                       </span>
                       <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-semibold">
                         Pothole_Road_Condition_Model
