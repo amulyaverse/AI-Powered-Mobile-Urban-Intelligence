@@ -30,6 +30,12 @@ eggs/
 *.secret
 
 # ── Node.js / Frontend ───────────────────────────────────────────────────────
+node_modules
+dist
+dist-ssr
+*.local
+.vite
+.vite/*
 node_modules/
 frontend/dist/
 frontend/dist-ssr/
