@@ -1,21 +1,86 @@
 @import "tailwindcss";
 @config "../tailwind.config.js";
 
+/* ── Base ───────────────────────────────────────────────────────────────── */
 body {
   background-color: #f8fafc; /* bg-slate-50 */
-  color: #0f172a; /* text-slate-900 */
+  color: #0f172a;             /* text-slate-900 */
+  /* Smooth scroll for back-to-top */
+  scroll-behavior: smooth;
 }
 
-/* Leaflet map styles container */
+/* ── Typography scale ───────────────────────────────────────────────────── */
+/* Consistent base so every page starts from the same baseline */
+html {
+  font-size: 14px;          /* 1rem = 14px across the dashboard */
+  -webkit-text-size-adjust: 100%; /* prevent iOS font inflate */
+}
+
+/* ── Leaflet map container ──────────────────────────────────────────────── */
 .leaflet-container {
   width: 100%;
   height: 100%;
   z-index: 10;
+  /* Prevent Leaflet from breaking out of its parent on mobile */
+  max-width: 100%;
+  overflow: hidden;
 }
 
-/* Leaflet map styles container */
-.leaflet-container {
-  width: 100%;
-  height: 100%;
-  z-index: 10;
+/* Ensure leaflet tooltips/popups stay within viewport on small screens */
+.leaflet-popup {
+  max-width: calc(100vw - 2rem);
+}
+
+.leaflet-popup-content-wrapper {
+  max-width: 280px;
+  word-break: break-word;
+}
+
+/* Prevent the zoom control overlapping content on very small screens */
+@media (max-width: 480px) {
+  .leaflet-top.leaflet-left {
+    top: 8px;
+    left: 8px;
+  }
+
+  .leaflet-control-zoom a {
+    width: 28px;
+    height: 28px;
+    line-height: 28px;
+    font-size: 16px;
+  }
+}
+
+/* ── Recharts responsive fix ─────────────────────────────────────────────── */
+/* Stop Recharts SVGs with hard-coded width from overflowing on mobile */
+.recharts-wrapper,
+.recharts-surface {
+  max-width: 100% !important;
+  overflow: hidden;
+}
+
+/* ── Mobile safe-area (notch) ───────────────────────────────────────────── */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* ── Scrollbar style (thin, on supporting browsers) ────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1; /* slate-300 */
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8; /* slate-400 */
 }

@@ -57,8 +57,14 @@ export default function AlertPanel({ alerts: initialAlerts = [], onAcknowledge }
 
   if (!alerts || alerts.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow border border-slate-200 p-6 text-center text-slate-500">
-        No active alerts at this time.
+      <div className="bg-white rounded-lg shadow border border-slate-200 p-8 flex flex-col items-center justify-center text-center min-h-[180px]">
+        <div className="p-3 bg-emerald-100 rounded-full mb-3">
+          <svg className="w-7 h-7 text-emerald-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.955 11.955 0 0 0 3 10.5c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.277-.202-2.505-.576-3.652A11.958 11.958 0 0 1 12 2.964Z" />
+          </svg>
+        </div>
+        <p className="font-semibold text-slate-700 text-sm">All Clear</p>
+        <p className="text-xs text-slate-400 mt-1">No active alerts at this time</p>
       </div>
     );
   }

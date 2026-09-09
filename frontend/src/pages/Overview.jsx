@@ -4,7 +4,7 @@ import { useEventWebSocket } from '../hooks/useEventWebSocket';
 import { Activity, AlertTriangle, MapPin, Truck, Sparkles, Wifi, Radio } from 'lucide-react';
 import AlertPanel from '../components/AlertPanel';
 import MiniMap from '../components/MiniMap';
-import { LoadingState, ErrorState } from '../components/PageStatusState';
+import { SkeletonOverview, ErrorState } from '../components/PageStatusState';
 
 export default function Overview() {
   const [metrics, setMetrics] = useState(null);
@@ -93,7 +93,7 @@ export default function Overview() {
   }, [latestEvent]);
 
   if (loading && !metrics) {
-    return <LoadingState message="Loading urban intelligence overview..." />;
+    return <SkeletonOverview />;
   }
 
   if (error && !metrics) {
@@ -115,9 +115,9 @@ export default function Overview() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-wrap justify-between items-start gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">Platform Overview</h2>
+          <h2 className="text-xl md:text-2xl font-bold text-slate-800">Platform Overview</h2>
           <p className="text-xs text-slate-500">
             Real-time mobile sensing and intelligence aggregated across active fleet
           </p>
@@ -129,19 +129,21 @@ export default function Overview() {
             <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <Wifi className="w-3.5 h-3.5" />
-              Live Ingestion Active
+              <span className="hidden sm:inline">Live Ingestion Active</span>
+              <span className="sm:hidden">Live</span>
             </span>
           ) : (
             <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
               <Radio className="w-3.5 h-3.5 text-slate-400" />
-              Synchronized Telemetry
+              <span className="hidden sm:inline">Synchronized Telemetry</span>
+              <span className="sm:hidden">Synced</span>
             </span>
           )}
         </div>
       </div>
 
       {/* KPI Cards — Powered by Real Incident Aggregates */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
           title="Active Buses"
           value={`${safeMetrics.activeBuses} Units`}
@@ -178,25 +180,25 @@ export default function Overview() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Map Widget with interactive incident popups */}
-        <div className="lg:col-span-2 bg-white rounded-lg shadow-xs border border-slate-200 p-4 min-h-[420px] flex flex-col">
-          <div className="flex justify-between items-center mb-3">
+        <div className="lg:col-span-2 bg-white rounded-lg shadow-xs border border-slate-200 p-4 flex flex-col">
+          <div className="flex justify-between items-center mb-3 gap-2 flex-wrap">
             <div>
               <h3 className="font-semibold text-lg text-slate-800">City Map Overview</h3>
               <p className="text-xs text-slate-500">
                 Click any incident marker to preview detected defect evidence & location
               </p>
             </div>
-            <span className="text-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded font-mono font-medium">
+            <span className="text-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded font-mono font-medium whitespace-nowrap">
               {recentEvents.length} Recent Detections
             </span>
           </div>
-          <div className="flex-1 bg-slate-100 rounded border border-slate-200 overflow-hidden relative min-h-[340px]">
+          <div className="bg-slate-100 rounded border border-slate-200 overflow-hidden relative min-h-[280px] md:min-h-[340px]">
             <MiniMap events={recentEvents} />
           </div>
         </div>
 
         {/* System Alerts */}
-        <div className="lg:col-span-1 h-[420px]">
+        <div className="lg:col-span-1 min-h-[300px]">
           <AlertPanel
             alerts={alerts}
             onAcknowledge={(id) => {
@@ -213,7 +215,7 @@ export default function Overview() {
           <Sparkles className="w-6 h-6 text-amber-400" />
           <h3 className="text-xl font-bold">Future Capabilities (Roadmap)</h3>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-white/10 p-4 rounded backdrop-blur-sm border border-white/5">
             <h4 className="font-semibold mb-1">Waterlogging</h4>
             <p className="text-xs text-slate-300">Detect flooded streets & blockages</p>
