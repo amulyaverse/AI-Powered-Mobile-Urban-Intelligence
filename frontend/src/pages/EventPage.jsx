@@ -743,7 +743,7 @@ export default function EventPage() {
                   {(selectedEvent.width_ratio != null || selectedEvent.severity_method) && (
                     <div className="border-t border-slate-100 pt-3 space-y-1.5 bg-amber-50/50 p-2.5 rounded-md border border-amber-200/60">
                       <p className="text-[11px] uppercase font-bold text-amber-900 tracking-wider">
-                        PR #37 Road Defect Telemetry
+                        Road Defect Telemetry
                       </p>
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         {selectedEvent.width_ratio != null && (

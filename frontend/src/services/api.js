@@ -225,54 +225,93 @@ if (typeof window !== 'undefined' && !ENV_FORCE_MOCK) {
 }
 
 // ── Normalisation Helpers ─────────────────────────────────────────────────────
+function parseNumericCoord(val) {
+  if (val === null || val === undefined || val === '') return null;
+  const num = Number(val);
+  return !isNaN(num) && isFinite(num) ? num : null;
+}
+
 function normalizeBus(b) {
   if (!b) return b;
-  const lat = b.last_lat ?? b.lat ?? 28.5639;
-  const lng = b.last_lng ?? b.lng ?? 77.2090;
+  const lat = parseNumericCoord(b.last_lat ?? b.lat);
+  const lng = parseNumericCoord(b.last_lng ?? b.lng);
   const traffic = b.last_traffic ?? b.traffic ?? 'Unknown';
   const camera = b.camera_status ?? b.cameraStatus ?? 'Active';
   const seen = b.last_seen ?? b.lastUpdate ?? new Date().toISOString();
   return {
-    ...b, id: b.id, route: b.route, status: b.status || 'Active',
-    camera_status: camera, cameraStatus: camera,
-    last_lat: lat, last_lng: lng, lat, lng,
-    last_traffic: traffic, traffic, last_seen: seen, lastUpdate: seen
+    ...b,
+    id: b.id,
+    route: b.route || 'Unassigned',
+    status: b.status || 'Active',
+    camera_status: camera,
+    cameraStatus: camera,
+    last_lat: lat,
+    last_lng: lng,
+    lat,
+    lng,
+    last_traffic: traffic,
+    traffic,
+    last_seen: seen,
+    lastUpdate: seen,
   };
 }
 
 function normalizeEvent(e) {
   if (!e) return e;
   const eventId = e.event_id || e.id || `EVT_${Math.random().toString(36).substring(2, 9)}`;
-  const lat = e.latitude ?? e.lat ?? 28.6139;
-  const lng = e.longitude ?? e.lng ?? 77.2090;
+  const lat = parseNumericCoord(e.latitude ?? e.lat);
+  const lng = parseNumericCoord(e.longitude ?? e.lng);
+  const conf = typeof e.confidence === 'number' ? e.confidence : (parseNumericCoord(e.confidence) ?? 0.85);
   return {
-    ...e, id: eventId, event_id: eventId,
+    ...e,
+    id: eventId,
+    event_id: eventId,
     event_type: (e.event_type || 'pothole').toLowerCase(),
-    confidence: typeof e.confidence === 'number' ? e.confidence : 0.85,
+    confidence: conf,
     severity: (e.severity || 'medium').toLowerCase(),
-    bus_id: e.bus_id || 'BUS_021', camera_id: e.camera_id || 'CAM_FRONT',
-    latitude: lat, longitude: lng, lat, lng,
+    bus_id: e.bus_id || 'BUS_021',
+    camera_id: e.camera_id || 'CAM_FRONT',
+    latitude: lat,
+    longitude: lng,
+    lat,
+    lng,
     timestamp: e.timestamp || new Date().toISOString(),
     evidence: e.evidence || null,
     status: (e.status || 'new').toLowerCase(),
-    repeated_detections: e.repeated_detections ?? 1
+    repeated_detections: Number(e.repeated_detections || 1),
+    car_count: e.car_count ?? null,
+    bike_count: e.bike_count ?? null,
+    bus_count: e.bus_count ?? null,
+    truck_count: e.truck_count ?? null,
+    total_vehicles: e.total_vehicles ?? null,
+    density: e.density ?? null,
+    density_score: e.density_score ?? null,
+    bbox: e.bbox || null,
+    surface_condition: e.surface_condition || null,
   };
 }
 
 function normalizeHotspot(h) {
   if (!h) return h;
-  const lat = h.center_lat ?? h.latitude ?? 28.6139;
-  const lng = h.center_lng ?? h.longitude ?? 77.2090;
+  const lat = parseNumericCoord(h.center_lat ?? h.latitude ?? h.lat);
+  const lng = parseNumericCoord(h.center_lng ?? h.longitude ?? h.lng);
   return {
-    ...h, id: h.id, center_lat: lat, center_lng: lng, latitude: lat, longitude: lng,
+    ...h,
+    id: h.id,
+    center_lat: lat,
+    center_lng: lng,
+    latitude: lat,
+    longitude: lng,
+    lat,
+    lng,
     event_type: (h.event_type || 'pothole').toLowerCase(),
-    detection_count: h.detection_count ?? h.report_count ?? 1,
+    detection_count: Number(h.detection_count ?? h.report_count ?? 1),
     severity: (h.severity || h.max_severity || 'medium').toLowerCase(),
-    priority_score: typeof h.priority_score === 'number' ? h.priority_score : 5.0,
+    priority_score: typeof h.priority_score === 'number' ? h.priority_score : (parseNumericCoord(h.priority_score) ?? 5.0),
     first_seen: h.first_seen || new Date().toISOString(),
     last_seen: h.last_seen || new Date().toISOString(),
     status: (h.status || 'active').toLowerCase(),
-    event_ids: h.event_ids || []
+    event_ids: h.event_ids || [],
   };
 }
 
