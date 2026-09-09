@@ -129,15 +129,14 @@ export default function RoadAnalytics() {
         </div>
       </div>
 
-      {/* PR #37 Edge AI Architecture & Model Card */}
+      {/* Edge AI Architecture & Model Card */}
       <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-xl p-6 text-white shadow-md border border-slate-700">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-700/80 pb-4 mb-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="bg-amber-500 text-slate-950 font-extrabold text-[11px] px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                PR #37 Edge AI Module
+              <span className="bg-gis-sage text-white font-extrabold text-[11px] px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                Edge AI Module
               </span>
-              <span className="text-slate-400 text-xs font-mono">Pothole_Road_Condition_Model</span>
             </div>
             <h3 className="text-lg font-bold text-slate-100">
               YOLOv8 Real-Time Pothole & Road Damage Detection Pipeline

@@ -432,7 +432,7 @@ export default function FleetManagement() {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   if (loading && buses.length === 0) {
-    return <LoadingState message="Loading fleet data from Urban Intelligence system..." />;
+    return <LoadingState message="Loading fleet data..." />;
   }
 
   if (error && buses.length === 0) {
@@ -454,9 +454,6 @@ export default function FleetManagement() {
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Fleet Management</h2>
-          <p className="text-slate-500 text-xs mt-0.5">
-            Register, configure, and decommission buses in the Urban Intelligence platform.
-          </p>
         </div>
         <div className="flex items-center gap-2">
           <button

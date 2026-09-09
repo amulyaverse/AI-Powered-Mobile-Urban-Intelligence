@@ -122,7 +122,7 @@ export default function LiveMonitoring() {
     return `${API_BASE_URL}${streamUrl}`;
   };
 
-  // Load sample test videos from PR 37
+  // Load sample test videos
   useEffect(() => {
     getSampleVideos()
       .then((vids) => {
@@ -630,12 +630,9 @@ export default function LiveMonitoring() {
       <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow-xs border border-slate-200">
         <div>
           <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-            <Video className="w-5 h-5 text-blue-600" />
-            Live Urban Fleet & Edge AI Monitoring
+            <Video className="w-5 h-5 text-gis-blue" />
+            Live Fleet Monitoring
           </h2>
-          <p className="text-sm text-slate-500">
-            Real-time multi-bus telemetry, server-side YOLO inference stream, and spatial anomaly aggregation
-          </p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -663,12 +660,6 @@ export default function LiveMonitoring() {
             <span className="text-xs bg-blue-100 text-blue-700 font-medium px-2 py-0.5 rounded-full">
               {buses.length} online
             </span>
-          </div>
-
-          <div className="p-3 border-b border-slate-100 bg-white">
-            <p className="text-xs text-slate-500">
-              Click a unit to attach its live stream and telemetry context:
-            </p>
           </div>
 
           <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
@@ -817,7 +808,7 @@ export default function LiveMonitoring() {
                     className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 shadow-2xs transition-colors cursor-pointer"
                   >
                     <Play className="w-3.5 h-3.5 fill-current" />
-                    Start Camera Feed
+                    Start
                   </button>
                 )}
               </div>
@@ -825,55 +816,54 @@ export default function LiveMonitoring() {
 
             {/* Main view area */}
             <div className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
-              {/* PR #37 Sample Video Presets & Upload Bar */}
+              {/* Video Source & Sample Preset Selection Bar */}
               {streamSource === 'video' && !isStreaming && (
-                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                        PR #37 Road Condition & Pothole Video Feeds:
+                <div className="p-4 bg-gis-slate-light/40 border border-gis-border rounded-2xl text-xs space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-bold text-slate-800 text-xs">Select Demo / Sample Road Video:</span>
+                    {videoFileUrl && (
+                      <span className="text-gis-sage-dark font-bold flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Video Ready
                       </span>
-                      <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-semibold">
-                        Pothole_Road_Condition_Model
-                      </span>
+                    )}
+                  </div>
+
+                  {sampleVideos && sampleVideos.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {sampleVideos.map((video) => {
+                        const isSelected = selectedPresetId === video.id || (videoFileUrl && videoFileUrl.includes(video.filename));
+                        return (
+                          <button
+                            key={video.id}
+                            type="button"
+                            onClick={() => handleSelectPreset(video)}
+                            className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-gis-blue text-white border-gis-blue shadow-sm'
+                                : 'bg-white text-slate-700 border-gis-border hover:border-gis-blue hover:bg-gis-blue-light/30'
+                            }`}
+                          >
+                            <span>{video.title}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${
+                              isSelected ? 'bg-black/20 text-white' : 'bg-slate-100 text-slate-500'
+                            }`}>
+                              {video.filename}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
-                    <span className="text-slate-400 text-[11px]">Select a video feed to test live</span>
-                  </div>
+                  )}
 
-                  <div className="flex flex-wrap gap-2">
-                    {sampleVideos.map((video) => {
-                      const isSelected = selectedPresetId === video.id || videoFileUrl?.includes(video.filename);
-                      return (
-                        <button
-                          key={video.id}
-                          type="button"
-                          onClick={() => handleSelectPreset(video)}
-                          className={`px-3 py-1.5 rounded-md border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
-                              : 'bg-white text-slate-700 border-slate-300 hover:border-amber-500 hover:bg-amber-50/50'
-                          }`}
-                        >
-                          <span>{video.title}</span>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${isSelected ? 'bg-amber-700 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                            {video.filename}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="flex items-center gap-3 pt-2 border-t border-slate-200/70 text-slate-500">
-                    <Upload className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span className="font-medium text-slate-600">Or upload custom road/traffic video:</span>
+                  <div className="pt-2 border-t border-gis-border/70 flex items-center gap-3">
+                    <Upload className="w-3.5 h-3.5 text-gis-slate shrink-0" />
+                    <span className="font-semibold text-slate-600">Or upload custom road/traffic video:</span>
                     <input
                       type="file"
                       accept="video/mp4,video/webm"
                       onChange={handleVideoFileUpload}
-                      className="text-xs text-slate-600 file:mr-2 file:py-0.5 file:px-2 file:rounded file:border-0 file:text-[11px] file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-800 cursor-pointer"
+                      className="text-xs text-slate-600 file:mr-2 file:py-1 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-gis-blue file:text-white hover:file:bg-gis-blue-dark cursor-pointer"
                     />
-                    {videoFileUrl && <span className="text-emerald-600 font-semibold ml-auto flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Video Ready</span>}
                   </div>
                 </div>
               )}
@@ -958,13 +948,9 @@ export default function LiveMonitoring() {
                       <Camera className="w-8 h-8 text-slate-500" />
                     </div>
                     <h4 className="text-base font-bold text-slate-200 mb-1">Camera Stream Inactive</h4>
-                    <p className="text-xs text-slate-400 max-w-sm mb-4">
-                      Click <strong>"Start Camera Feed"</strong> above to attach your laptop webcam or a test video file. Frames will stream at 2 FPS and YOLO will detect objects live.
+                    <p className="text-xs text-slate-400 max-w-xs">
+                      Select a source above and press <strong>Start</strong> to begin inference.
                     </p>
-                    <div className="flex items-center gap-2 text-[11px] text-slate-500 bg-slate-900/80 px-3 py-1.5 rounded-full border border-slate-800">
-                      <span>Or stream via terminal:</span>
-                      <code className="text-emerald-400 font-mono">python scripts/stream_camera.py --synthetic</code>
-                    </div>
                   </div>
                 )}
 
@@ -981,8 +967,8 @@ export default function LiveMonitoring() {
                           : 'No incidents in view (Road surface clear)'}
                       </span>
                       {lastDetectionSummary?.width_ratio != null && (
-                        <span className="bg-amber-500/30 text-amber-300 px-2 py-0.5 rounded border border-amber-500/40 text-[11px] font-bold">
-                          PR #37 Width: {Math.round(lastDetectionSummary.width_ratio * 100)}% ({lastDetectionSummary.severity?.toUpperCase()})
+                        <span className="bg-gis-amber-light text-gis-amber px-2 py-0.5 rounded-xl border border-gis-amber/30 text-[11px] font-bold">
+                          Width: {Math.round(lastDetectionSummary.width_ratio * 100)}% ({lastDetectionSummary.severity?.toUpperCase()})
                         </span>
                       )}
                       {lastDetectionSummary?.area_ratio != null && (
@@ -1009,17 +995,17 @@ export default function LiveMonitoring() {
                   </p>
                 </div>
 
-                <div className="p-3.5 border border-slate-200 rounded-lg bg-slate-50 flex flex-col justify-between">
-                  <p className="text-xs text-slate-500 font-medium">Inference Engine</p>
+                <div className="p-3.5 border border-gis-border rounded-2xl bg-gis-slate-light/40 flex flex-col justify-between">
+                  <p className="text-xs text-gis-slate font-medium">Inference Engine</p>
                   <div className="text-slate-800 text-sm font-semibold mt-1 flex items-center gap-1.5">
-                    <Cpu className="w-4 h-4 text-blue-600 shrink-0" />
+                    <Cpu className="w-4 h-4 text-gis-blue shrink-0" />
                     <span>
-                      {inferenceMode === 'pothole' ? 'YOLOv8 Road Defect AI (PR #37)' : 'YOLOv8 Edge (TRAFFIC)'}
+                      {inferenceMode === 'pothole' ? 'YOLOv8 Road Defect AI' : 'YOLOv8 Edge (Traffic)'}
                     </span>
                   </div>
                   {inferenceMode === 'pothole' && (
-                    <span className="text-[10px] text-amber-700 font-medium mt-0.5">
-                      Approach A Width Heuristic + Area Ratio
+                    <span className="text-[10px] text-gis-amber font-semibold mt-0.5">
+                      Width & Depth Heuristic Analysis
                     </span>
                   )}
                 </div>

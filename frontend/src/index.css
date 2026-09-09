@@ -1,21 +1,71 @@
+/* ------------------------------------------------------------------ */
+/*  GIS Command Center — Global Styles                                 */
+/* ------------------------------------------------------------------ */
+
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&display=swap');
+
 @import "tailwindcss";
 @config "../tailwind.config.js";
 
+/* ── Base ────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
 body {
-  background-color: #f8fafc; /* bg-slate-50 */
-  color: #0f172a; /* text-slate-900 */
+  font-family: 'Nunito', system-ui, sans-serif;
+  background-color: #f2f5f8;
+  color: #1e293b;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Leaflet map styles container */
+/* ── Scrollbar ───────────────────────────────────────────────────── */
+::-webkit-scrollbar            { width: 6px; height: 6px; }
+::-webkit-scrollbar-track      { background: transparent; }
+::-webkit-scrollbar-thumb      { background: #c8d3e0; border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover{ background: #a0b0c4; }
+
+/* ── Leaflet Map ─────────────────────────────────────────────────── */
 .leaflet-container {
   width: 100%;
   height: 100%;
   z-index: 10;
+  font-family: 'Nunito', sans-serif;
 }
 
-/* Leaflet map styles container */
-.leaflet-container {
-  width: 100%;
-  height: 100%;
-  z-index: 10;
+/* Muted / desaturated map tiles */
+.leaflet-tile-pane {
+  filter: saturate(0.7) brightness(1.03) contrast(0.95);
 }
+
+/* Rounded popup */
+.leaflet-popup-content-wrapper {
+  border-radius: 16px !important;
+  box-shadow: 0 8px 32px rgba(60,80,110,0.16) !important;
+  font-family: 'Nunito', sans-serif !important;
+  padding: 0 !important;
+}
+.leaflet-popup-content { margin: 0 !important; }
+.leaflet-popup-tip-container { display: none; }
+
+/* ── Card entrance animation ─────────────────────────────────────── */
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.card-enter { animation: card-in 0.3s ease-out both; }
+
+/* ── Floating navbar blur backdrop ───────────────────────────────── */
+.gis-navbar {
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+}
+
+/* ── Frosted glass card ──────────────────────────────────────────── */
+.glass-card {
+  background: rgba(255,255,255,0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* ── Recharts smooth curves ──────────────────────────────────────── */
+.recharts-curve { stroke-linecap: round; stroke-linejoin: round; }
