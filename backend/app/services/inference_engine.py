@@ -436,6 +436,7 @@ class InferenceEngine:
                     results = self._model.track(
                         frame,
                         persist=True,
+                        tracker="bytetrack.yaml",
                         conf=settings.INFERENCE_CONFIDENCE,
                         iou=settings.INFERENCE_IOU,
                         verbose=False,

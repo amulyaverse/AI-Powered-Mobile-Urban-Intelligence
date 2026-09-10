@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     # Explicit FPS target for server-side YOLO inference per model mode.
     # Controlled inference rate: 5 FPS (200ms interval).
     DETECTION_FPS_POTHOLE: float = 5.0    # Default FPS for pothole detection (controlled rate)
-    DETECTION_FPS_TRAFFIC: float = 5.0    # Default FPS for traffic detection (controlled rate)
+    DETECTION_FPS_TRAFFIC: float = 15.0   # Increased from 5.0 for smoother vehicle tracking
     WS_FRAME_SAMPLE_INTERVAL_SEC: float = 0.2  # 5 FPS sample interval (200ms)
     # Hard cap per incoming frame — reject frames larger than this.
     WS_MAX_FRAME_SIZE_BYTES: int = 512_000  # 500 KB
