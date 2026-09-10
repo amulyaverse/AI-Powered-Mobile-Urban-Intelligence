@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { formatDateTime, formatRelativeTime } from '../utils/dateTime';
-import { Filter, Search, Eye, AlertTriangle, X, Maximize2, Minimize2, Radio, Clock } from 'lucide-react';
+import { Filter, Search, Eye, AlertTriangle, X, Maximize2, Minimize2, Radio, Clock, LayoutGrid, List } from 'lucide-react';
 import { LoadingState, ErrorState } from '../components/PageStatusState';
 import CapturedEvidenceViewer, { getEvidenceFrameUrl } from '../components/CapturedEvidenceViewer';
 import { useEventWebSocket } from '../hooks/useEventWebSocket';
@@ -19,6 +19,10 @@ export default function EventPage() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'grid'
+  const [selectedGrid, setSelectedGrid] = useState(null);
+  const [gridSizeMeters, setGridSizeMeters] = useState(100); // 100m, 200m, etc.
 
   const { latestEvent, isConnected: isWsConnected } = useEventWebSocket();
 
@@ -183,6 +187,56 @@ export default function EventPage() {
     });
   }, [events, searchTerm, filterType, filterSeverity, filterStatus]);
 
+  // Group filtered events into 100x100m grids
+  const groupedGrids = React.useMemo(() => {
+    const grids = {};
+    filteredEvents.forEach(event => {
+      const lat = event.latitude ?? event.lat;
+      const lng = event.longitude ?? event.lng;
+      
+      // If no valid coordinates, we skip grouping it into a spatial grid
+      if (typeof lat !== 'number' || typeof lng !== 'number') return;
+      
+      // 100m is roughly 0.0009 degrees
+      const degreeMultiplier = (gridSizeMeters / 100) * 0.0009;
+      const gridLat = Math.round(lat / degreeMultiplier) * degreeMultiplier;
+      const gridLng = Math.round(lng / degreeMultiplier) * degreeMultiplier;
+      const gridId = `grid_${gridLat.toFixed(4)}_${gridLng.toFixed(4)}`;
+      
+      if (!grids[gridId]) {
+        grids[gridId] = {
+          id: gridId,
+          lat: gridLat,
+          lng: gridLng,
+          events: [],
+          types: {},
+          maxSeverity: 'low',
+          latestTime: event.timestamp
+        };
+      }
+      
+      grids[gridId].events.push(event);
+      
+      const type = (event.event_type || 'unknown').toLowerCase();
+      grids[gridId].types[type] = (grids[gridId].types[type] || 0) + 1;
+      
+      // Update max severity
+      const sevLevels = { 'critical': 4, 'very high': 4, 'very_high': 4, 'high': 3, 'medium': 2, 'low': 1 };
+      const currentMax = sevLevels[grids[gridId].maxSeverity] || 0;
+      const eventSev = sevLevels[(event.severity || 'low').toLowerCase()] || 0;
+      if (eventSev > currentMax) {
+        grids[gridId].maxSeverity = (event.severity || 'low').toLowerCase();
+      }
+      
+      // Update latest time
+      if (!grids[gridId].latestTime || new Date(event.timestamp) > new Date(grids[gridId].latestTime)) {
+        grids[gridId].latestTime = event.timestamp;
+      }
+    });
+    
+    return Object.values(grids).sort((a, b) => new Date(b.latestTime).getTime() - new Date(a.latestTime).getTime());
+  }, [filteredEvents, gridSizeMeters]);
+
   // Quick filter counts
   const counts = React.useMemo(() => {
     let potholes = 0;
@@ -285,6 +339,35 @@ export default function EventPage() {
             <p className="text-slate-500 text-xs mt-0.5">Review and manage urban intelligence events detected by the fleet.</p>
           </div>
           <div className="flex gap-3">
+            <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+              <button 
+                onClick={() => { setViewMode('list'); setSelectedGrid(null); }}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-2 transition-colors cursor-pointer ${viewMode === 'list' ? 'bg-white shadow-sm text-brand-700' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                <List className="w-4 h-4" /> List
+              </button>
+              <button 
+                onClick={() => setViewMode('grid')}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-2 transition-colors cursor-pointer ${viewMode === 'grid' ? 'bg-white shadow-sm text-brand-700' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                <LayoutGrid className="w-4 h-4" /> {gridSizeMeters}m Grids
+              </button>
+            </div>
+            
+            {viewMode === 'grid' && (
+              <select 
+                value={gridSizeMeters}
+                onChange={(e) => setGridSizeMeters(Number(e.target.value))}
+                className="px-2.5 py-1.5 border border-slate-300 rounded-md text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 bg-white"
+                title="Change Grid Block Size"
+              >
+                <option value={100}>100m Block</option>
+                <option value={200}>200m Block</option>
+                <option value={300}>300m Block</option>
+                <option value={500}>500m Block</option>
+              </select>
+            )}
+
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
               <input 
@@ -475,7 +558,90 @@ export default function EventPage() {
               </button>
             )}
           </div>
+        ) : viewMode === 'grid' && !selectedGrid ? (
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 text-sm text-slate-600">
+                <th className="p-4 font-semibold">Grid Area (Lat, Lng)</th>
+                <th className="p-4 font-semibold text-center">Total Incidents</th>
+                <th className="p-4 font-semibold">Max Severity</th>
+                <th className="p-4 font-semibold">Incident Types</th>
+                <th className="p-4 font-semibold">Latest Activity</th>
+                <th className="p-4 font-semibold">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {groupedGrids.map((grid) => (
+                <tr 
+                  key={grid.id} 
+                  className="border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer"
+                  onClick={() => setSelectedGrid(grid)}
+                >
+                  <td className="p-4">
+                    <div className="font-medium text-slate-800">Zone Center</div>
+                    <div className="font-mono text-xs text-slate-500">{grid.lat.toFixed(4)}, {grid.lng.toFixed(4)}</div>
+                  </td>
+                  <td className="p-4 text-center">
+                    <span className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-slate-100 font-bold text-slate-700 border border-slate-200">
+                      {grid.events.length}
+                    </span>
+                  </td>
+                  <td className="p-4">
+                    <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider ${getSeverityColor(grid.maxSeverity)}`}>
+                      {grid.maxSeverity}
+                    </span>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex flex-wrap gap-1">
+                      {Object.entries(grid.types).map(([type, count]) => (
+                        <span key={type} className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs font-medium border border-slate-200 capitalize">
+                          {count} {type.replace('_', ' ')}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="p-4 text-sm">
+                    <div className="font-semibold text-slate-800">
+                      {formatDateTime(grid.latestTime, 'dd MMM yyyy, HH:mm')}
+                    </div>
+                    <div className="text-xs text-brand-600 font-medium mt-0.5">
+                      {formatRelativeTime(grid.latestTime)}
+                    </div>
+                  </td>
+                  <td className="p-4">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedGrid(grid);
+                      }}
+                      className="text-brand-600 hover:text-brand-800 flex items-center gap-1 text-sm font-medium cursor-pointer"
+                    >
+                      <LayoutGrid className="w-4 h-4" /> View Events
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         ) : (
+          <div>
+            {selectedGrid && (
+              <div className="bg-brand-50 p-4 border-b border-brand-200 flex justify-between items-center">
+                <div>
+                  <h3 className="font-bold text-brand-900 flex items-center gap-2">
+                    <LayoutGrid className="w-5 h-5 text-brand-600" />
+                    Viewing Grid Zone: {selectedGrid.lat.toFixed(4)}, {selectedGrid.lng.toFixed(4)}
+                  </h3>
+                  <p className="text-xs text-brand-700 mt-1">Showing {selectedGrid.events.length} incidents in this {gridSizeMeters}x{gridSizeMeters}m area.</p>
+                </div>
+                <button 
+                  onClick={() => setSelectedGrid(null)}
+                  className="px-3 py-1.5 bg-white border border-brand-200 text-brand-700 rounded-md text-sm font-semibold hover:bg-brand-100 transition-colors cursor-pointer"
+                >
+                  Back to All Grids
+                </button>
+              </div>
+            )}
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-sm text-slate-600">
@@ -490,7 +656,7 @@ export default function EventPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredEvents.map((event) => (
+              {(selectedGrid ? selectedGrid.events : filteredEvents).map((event) => (
                 <tr 
                   key={event.event_id} 
                   className={`border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer ${
@@ -556,6 +722,7 @@ export default function EventPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
