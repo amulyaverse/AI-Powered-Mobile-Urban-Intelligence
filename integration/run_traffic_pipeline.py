@@ -37,20 +37,23 @@ def adapt_traffic_event(event) -> dict:
     Convert Pranav's TrafficEvent dataclass into the dict shape that
     event_generator.process_detection() expects (docs/api/event-schema.md).
 
-    Mapping notes:
-    - event_type: emits "vehicle_count" to match the schema and backend inference engine.
+        Mapping notes:
+    - event_type: "vehicle_count" (not "congestion") -- this is what
+      unlocks car_count/bike_count/density fields on Arjun's backend
+      schema and inference engine, since those are only populated for
+      vehicle_count events.
     - severity: his `density` field (LOW/MEDIUM/HIGH/CRITICAL) already
       uses the exact same words as the schema's `severity` field, just
       different case -- so this is a straight .lower(), no judgment call.
+    - vehicle_counts / density / density_score / etc: forwarded directly
+      so the backend stores the full car/bike/bus/truck breakdown instead
+      of discarding it.
     - evidence: his pipeline doesn't save a snapshot image per event
       (only an optional full annotated video via --save), so there's no
-      real file to point to yet. Using the frame index as a placeholder
-      string -- flag this to the team if you want an actual saved frame
-      per event later.
+      real file to point to yet. Using the frame index as a placeholder.
     - camera_id / latitude / longitude: intentionally left out here --
       event_generator.py already fills in a default camera_id and
-      attaches simulated GPS automatically, so you don't need to supply
-      them from Pranav's event.
+      attaches simulated GPS automatically.
     """
     return {
         "event_type": "vehicle_count",
@@ -58,6 +61,12 @@ def adapt_traffic_event(event) -> dict:
         "severity": event.density.lower(),
         "bus_id": event.bus_id,
         "evidence": f"frame_{event.source_frame}",
+        "vehicle_counts": event.vehicle_counts,
+        "total_vehicles": event.total_vehicles,
+        "density": event.density,
+        "density_score": event.density_score,
+        "source_frame": event.source_frame,
+        "frame_coverage_ratio": event.frame_coverage_ratio,
     }
 
 

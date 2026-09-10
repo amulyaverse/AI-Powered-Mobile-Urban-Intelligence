@@ -84,9 +84,9 @@ function SettingsModal({ connState, isChecking, onCheck, onClose,
 }) {
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
-      <div className="glass-card rounded-3xl shadow-float w-full max-w-md overflow-hidden border border-gis-border">
+      <div className="glass-card rounded-3xl shadow-float w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden border border-gis-border">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gis-border flex justify-between items-center bg-gis-slate-light/50">
+        <div className="shrink-0 px-6 py-4 border-b border-gis-border flex justify-between items-center bg-gis-slate-light/50">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-2xl bg-gis-blue/10 flex items-center justify-center">
               <Settings className="w-4 h-4 text-gis-blue" />
@@ -101,7 +101,7 @@ function SettingsModal({ connState, isChecking, onCheck, onClose,
           </button>
         </div>
 
-        <div className="p-6 space-y-5 text-sm">
+        <div className="p-6 space-y-5 text-sm overflow-y-auto min-h-0">
           {/* API Status */}
           <div>
             <h4 className="font-bold text-slate-700 mb-2 flex items-center justify-between text-xs uppercase tracking-wide">
@@ -266,7 +266,7 @@ function SettingsModal({ connState, isChecking, onCheck, onClose,
           </div>
         </div>
 
-        <div className="px-6 py-4 bg-gis-slate-light/40 border-t border-gis-border flex justify-end">
+        <div className="shrink-0 px-6 py-4 bg-gis-slate-light/40 border-t border-gis-border flex justify-end">
           <button
             onClick={onClose}
             className="px-5 py-2 bg-gis-blue text-white rounded-xl font-bold text-sm hover:bg-gis-blue-dark transition-all duration-150 shadow-sm cursor-pointer"
