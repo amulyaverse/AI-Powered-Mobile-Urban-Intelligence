@@ -820,7 +820,7 @@ export default function LiveMonitoring() {
               {streamSource === 'video' && !isStreaming && (
                 <div className="p-4 bg-gis-slate-light/40 border border-gis-border rounded-2xl text-xs space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-bold text-slate-800 text-xs">Select Demo / Sample Road Video:</span>
+                    <span className="font-bold text-slate-800 text-xs">Select Demo / Sample Road Video (Temporary Feature):</span>
                     {videoFileUrl && (
                       <span className="text-gis-sage-dark font-bold flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5" /> Video Ready
