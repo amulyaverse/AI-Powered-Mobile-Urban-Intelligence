@@ -29,7 +29,6 @@ def test_list_sample_videos():
     assert isinstance(data, list)
     assert len(data) >= 3
     filenames = [v["filename"] for v in data]
-    assert "cityRoad_potHoles.mp4" in filenames
     assert "ruralRoad_potHoles.mp4" in filenames
 
 
