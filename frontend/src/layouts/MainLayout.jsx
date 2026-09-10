@@ -262,7 +262,7 @@ function SettingsModal({ connState, isChecking, onCheck, onClose,
             <span className="flex items-center gap-1.5">
               <Shield className="w-3.5 h-3.5 text-gis-sage" /> Operator: Authority Admin
             </span>
-            <span className="font-semibold text-gis-slate">NagarNet v1.0</span>
+            <span className="font-semibold text-gis-slate">UrbanPulse v1.0</span>
           </div>
         </div>
 
@@ -336,15 +336,15 @@ export default function MainLayout() {
         <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-3">
 
           {/* Brand */}
-          <div className="flex items-center gap-2.5 shrink-0 mr-2">
+          <NavLink to="/" className="flex items-center gap-2.5 shrink-0 mr-2 hover:opacity-80 transition-opacity cursor-pointer">
             <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-gis-blue to-gis-blue-dark flex items-center justify-center shadow-sm">
               <Map className="w-5 h-5 text-white" />
             </div>
             <div className="hidden sm:block">
-              <div className="font-extrabold text-sm text-slate-800 leading-tight">NagarNet</div>
+              <div className="font-extrabold text-sm text-slate-800 leading-tight">UrbanPulse</div>
               <div className="text-[10px] text-gis-slate font-semibold leading-tight">City Intelligence</div>
             </div>
-          </div>
+          </NavLink>
 
           {/* Nav Pills */}
           <nav className="flex items-center gap-1 flex-1 overflow-x-auto no-scrollbar py-1">

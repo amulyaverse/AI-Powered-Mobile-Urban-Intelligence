@@ -92,24 +92,36 @@ class HealingManager:
     def get_cache_list(self):
         return [{"event_id": pid, "latitude": p["latitude"], "longitude": p["longitude"]} for pid, p in self.known_potholes.items()]
 
-class SimulatedGPSGenerator:
+import sys
+import os
+
+class VideoSyncedGPSGenerator:
     """
-    Simulated GPS Generator module that yields mock latitude and longitude coordinates
-    along an Indian highway route.
+    GPS Generator that yields coordinates from a CSV based on video timestamp.
     """
-    def __init__(self, start_lat=28.6139, start_lon=77.2090, step=0.00005):
-        self.lat = start_lat
-        self.lon = start_lon
-        self.step = step
-        self.frame_count = 0
+    def __init__(self, csv_file=None):
+        if csv_file is None:
+            # Default to the demo CSV if not provided
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            csv_file = os.path.join(base_dir, '..', '..', 'gps', 'routes', 'BUS_021_demo.csv')
+            
+        gps_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'gps')
+        if gps_dir not in sys.path:
+            sys.path.insert(0, gps_dir)
+            
+        try:
+            from gps_provider import GPSProvider
+            self.provider = GPSProvider(csv_file)
+        except ImportError:
+            print("Warning: GPSProvider not found, falling back to 0,0")
+            self.provider = None
         
-    def get_coordinates(self):
-        # Update coordinates to simulate moving along a highway route
-        self.frame_count += 1
-        # Step every frame to simulate continuous movement
-        self.lat -= self.step
-        self.lon += self.step
-        return self.lat, self.lon
+    def get_coordinates(self, video_time_sec):
+        if self.provider:
+            pos = self.provider.get_current_position(video_time_sec)
+            if pos:
+                return pos['latitude'], pos['longitude']
+        return 28.6139, 77.2090
 
 def calculate_distance(lat1, lon1, lat2, lon2):
     return math.sqrt((lat1 - lat2)**2 + (lon1 - lon2)**2)
@@ -131,7 +143,7 @@ class PotholePipeline:
         self.camera_id = camera_id
         
         self.detector = PotholeDetector(model_path=model_name, conf=conf)
-        self.gps_gen = SimulatedGPSGenerator()
+        self.gps_gen = VideoSyncedGPSGenerator()
         self.healing_manager = HealingManager(
             known_potholes_list=known_potholes or [],
             radius_meters=HEALING_DISTANCE_RADIUS_METERS,
@@ -157,8 +169,15 @@ class PotholePipeline:
                 if not ret:
                     break
                     
+                fps = cap.get(cv2.CAP_PROP_FPS)
+                if fps <= 0 or math.isnan(fps):
+                    fps = 30.0
+                
+                frame_count = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+                video_time_sec = frame_count / fps
+                    
                 current_time = time.time()
-                current_lat, current_lon = self.gps_gen.get_coordinates()
+                current_lat, current_lon = self.gps_gen.get_coordinates(video_time_sec)
                 
                 try:
                     current_lat, current_lon = validate_gps(current_lat, current_lon)
