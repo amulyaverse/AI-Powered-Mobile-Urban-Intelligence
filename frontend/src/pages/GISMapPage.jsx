@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Circle, Rectangle, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { getEvents, getHotspots, getBuses } from '../services/api';
@@ -19,7 +19,8 @@ import {
   ShieldAlert,
   Eye,
   Crosshair,
-  AlertCircle
+  AlertCircle,
+  LayoutGrid
 } from 'lucide-react';
 import { LoadingState, ErrorState } from '../components/PageStatusState';
 import { formatDateTime, formatRelativeTime } from '../utils/dateTime';
@@ -174,6 +175,8 @@ export default function GISMapPage() {
   const [showEvents, setShowEvents]     = useState(true);
   const [showHotspots, setShowHotspots] = useState(true);
   const [showBuses, setShowBuses]       = useState(true);
+  const [showGrids, setShowGrids]       = useState(true);
+  const [gridSizeMeters, setGridSizeMeters] = useState(100); // 100m, 200m, etc.
 
   // Filters
   const [selectedType, setSelectedType] = useState('all'); // all | pothole | road_defect | congestion
@@ -278,6 +281,40 @@ export default function GISMapPage() {
       return true;
     });
   }, [events, selectedType, selectedSev, timeFilter, searchTerm]);
+
+  // Grouped Grids
+  const groupedGrids = useMemo(() => {
+    const grids = {};
+    filteredEvents.forEach(event => {
+      const lat = event.latitude ?? event.lat;
+      const lng = event.longitude ?? event.lng;
+      if (typeof lat !== 'number' || typeof lng !== 'number') return;
+      
+      const degreeMultiplier = (gridSizeMeters / 100) * 0.0009;
+      const gridLat = Math.round(lat / degreeMultiplier) * degreeMultiplier;
+      const gridLng = Math.round(lng / degreeMultiplier) * degreeMultiplier;
+      const gridId = `grid_${gridLat.toFixed(4)}_${gridLng.toFixed(4)}`;
+      
+      if (!grids[gridId]) {
+        grids[gridId] = {
+          id: gridId,
+          lat: gridLat,
+          lng: gridLng,
+          events: [],
+          maxSeverity: 'low',
+        };
+      }
+      grids[gridId].events.push(event);
+      
+      const sevLevels = { 'critical': 4, 'very high': 4, 'very_high': 4, 'high': 3, 'medium': 2, 'low': 1 };
+      const currentMax = sevLevels[grids[gridId].maxSeverity] || 0;
+      const eventSev = sevLevels[(event.severity || 'low').toLowerCase()] || 0;
+      if (eventSev > currentMax) {
+        grids[gridId].maxSeverity = (event.severity || 'low').toLowerCase();
+      }
+    });
+    return Object.values(grids);
+  }, [filteredEvents, gridSizeMeters]);
 
   // Valid Hotspots
   const validHotspots = useMemo(() => {
@@ -431,6 +468,21 @@ export default function GISMapPage() {
             <option value="2h">Last 2 Hours</option>
             <option value="recent">Recent (&lt; 30m)</option>
           </select>
+
+          {/* Grid Size Control */}
+          {showGrids && (
+            <select
+              value={gridSizeMeters}
+              onChange={(e) => setGridSizeMeters(Number(e.target.value))}
+              className="px-2.5 py-1.5 rounded-xl border border-purple-200 bg-purple-50 text-xs font-bold text-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500/30"
+              title="Change Grid Block Size"
+            >
+              <option value={100}>100m Block</option>
+              <option value={200}>200m Block</option>
+              <option value={300}>300m Block</option>
+              <option value={500}>500m Block</option>
+            </select>
+          )}
         </div>
 
         {/* Layer Toggles & Map Actions */}
@@ -444,6 +496,19 @@ export default function GISMapPage() {
               className="rounded text-blue-600 focus:ring-blue-500"
             />
             <span>Detections ({filteredEvents.length})</span>
+          </label>
+
+          <label className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer select-none bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
+            <input
+              type="checkbox"
+              checked={showGrids}
+              onChange={(e) => setShowGrids(e.target.checked)}
+              className="rounded text-purple-600 focus:ring-purple-500"
+            />
+            <span className="flex items-center gap-1">
+              <LayoutGrid className="w-3.5 h-3.5 text-purple-500" />
+              <span>Grid Zones ({groupedGrids.length})</span>
+            </span>
           </label>
 
           <label className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer select-none bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
@@ -689,6 +754,67 @@ export default function GISMapPage() {
               );
             })}
 
+          {/* ── Layer: Variable Grid Zones ─────────────────────── */}
+          {showGrids &&
+            groupedGrids.map((grid) => {
+              const degreeMultiplier = (gridSizeMeters / 100) * 0.0009;
+              const halfSize = degreeMultiplier / 2;
+              const bounds = [
+                [grid.lat - halfSize, grid.lng - halfSize],
+                [grid.lat + halfSize, grid.lng + halfSize]
+              ];
+              
+              const sev = grid.maxSeverity.toLowerCase();
+              const style = HOTSPOT_STYLES[sev] || HOTSPOT_STYLES.medium;
+
+              return (
+                <Rectangle
+                  key={`gis-grid-${grid.id}`}
+                  bounds={bounds}
+                  pathOptions={{
+                    color: style.stroke,
+                    fillColor: style.fill,
+                    fillOpacity: 0.15,
+                    weight: 2,
+                    dashArray: '5 5'
+                  }}
+                >
+                  <Popup>
+                    <div className="w-64 font-sans text-xs bg-white text-slate-800">
+                      <div className="p-3 text-white flex items-center justify-between" style={{ backgroundColor: style.stroke }}>
+                        <div className="flex items-center gap-1.5 font-extrabold text-sm">
+                          <LayoutGrid className="w-4 h-4 text-white/80" />
+                          <span>{gridSizeMeters}m Grid Zone</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-white/20 text-white">
+                          {grid.maxSeverity}
+                        </span>
+                      </div>
+                      <div className="p-3 space-y-2 bg-white">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-slate-400 font-semibold uppercase">Zone Center</span>
+                          <span className="font-mono text-slate-800">{grid.lat.toFixed(4)}, {grid.lng.toFixed(4)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-slate-400 font-semibold uppercase">Total Incidents</span>
+                          <span className="font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">{grid.events.length}</span>
+                        </div>
+                        <div className="pt-2">
+                          <button
+                            onClick={() => navigate('/events')}
+                            className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-1.5 rounded-xl flex items-center justify-center gap-1 text-[11px] transition-colors cursor-pointer"
+                          >
+                            <Eye className="w-3 h-3" /> View in Incidents Tab
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </Popup>
+                </Rectangle>
+              );
+            })
+          }
+
           {/* ── Layer 3: Active Mobile Bus Fleet Sensors ──────────── */}
           {showBuses &&
             validBuses.map((bus) => {
@@ -791,8 +917,14 @@ export default function GISMapPage() {
                 <span className="font-semibold text-slate-700">Persistent Hotspot Cluster</span>
               </div>
             )}
+            {showGrids && (
+              <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                <div className="w-3.5 h-3.5 rounded border border-purple-500/80 bg-purple-500/20" />
+                <span className="font-semibold text-slate-700">{gridSizeMeters}m Grid Zone</span>
+              </div>
+            )}
             {showBuses && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
                 <div className="px-1 py-0.5 rounded-full bg-indigo-900 text-white text-[8px] font-bold">🚌 BUS</div>
                 <span className="font-semibold text-slate-700">Mobile Bus Sensor</span>
               </div>
