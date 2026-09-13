@@ -57,6 +57,9 @@ flowchart TD
         DETECT -->|"Event Generator"| PAYLOAD["Geo-Tagged JSON Payload"]
     end
 
+    %% GPS is metadata associated with AI-generated detections. The YOLO model itself does not consume GPS as an input.
+    %% Current implementation relies on a CSV-based synchronized GPS Replay simulator for demonstration purposes.
+
     subgraph Backend["FastAPI Central Intelligence Server"]
         WS_INGEST["WebSocket Ingestion (/api/ws/camera)"]
         REST_INGEST["REST API Ingestion (/api/events)"]
@@ -121,6 +124,7 @@ The UrbanPulse edge layer employs two specialized computer vision pipelines:
 - **Base Architecture**: YOLOv8 Nano (`yolov8n.pt`)
 - **Classes**: Car, Motorcycle/Bike, Bus, Truck (COCO 80-class subset)
 - **Output**: Total vehicle count, vehicle class breakdown, traffic density classification (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`), and area coverage ratio.
+- **Evaluation**: Formal Traffic AI benchmark metrics are not currently reported.
 
 ### 2. Road Defect & Pothole AI Pipeline
 - **Model Weights**: `edge-ai/pothole-latest/Pothole_Road_Condition_Model/best_2.pt`
@@ -279,7 +283,14 @@ The FastAPI backend exposes the following endpoints:
 
 ---
 
-## 11. Repository Structure
+## 11. GPS Implementation
+
+GPS is metadata associated with AI-generated detections. The YOLO model itself does not consume GPS as an input.
+The current implementation utilizes a deterministic **CSV-based GPS Replay simulator** for demonstration purposes. This ensures that video inferences are perfectly synchronized with map coordinates based on the frame timestamp, rather than relying on real physical GPS hardware.
+
+---
+
+## 12. Repository Structure
 
 ```
 AI-Powered-Mobile-Urban-Intelligence/

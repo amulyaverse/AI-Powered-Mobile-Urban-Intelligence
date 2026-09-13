@@ -91,5 +91,6 @@ Thumbs.db
 *.sqlite
 *.sqlite3
 test.db
+*_current_state.json
 
 
